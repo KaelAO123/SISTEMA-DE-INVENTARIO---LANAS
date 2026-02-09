@@ -296,8 +296,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['accion'])) {
                 $monto = $deuda_anterior;
             }
 
-            $nueva_deuda = $deuda_anterior - $monto;
-            $nuevo_limite = $limite_actual + $monto;
+            if ($monto >= $limite_actual) {
+                $nueva_deuda = $deuda_anterior - $limite_actual;
+                $nuevo_limite = 0;
+            } else {
+                $nueva_deuda = $deuda_anterior - $monto;
+                $nuevo_limite = $limite_actual - $monto;
+            }
 
             $stmt = $db->prepare("UPDATE clientes 
                                 SET saldo_deuda = ?, 
@@ -1139,7 +1144,7 @@ Funciones::mostrarAlertaSesion();
             border-bottom: 2px solid var(--gris-medio);
         }
 
-                /* Nuevos estilos para gestión de crédito */
+        /* Nuevos estilos para gestión de crédito */
         .credito-section {
             background: #fff8e1;
             border-radius: 12px;
@@ -1148,7 +1153,7 @@ Funciones::mostrarAlertaSesion();
             border: 2px solid #ffd54f;
             box-shadow: 0 3px 15px rgba(255, 213, 79, 0.1);
         }
-        
+
         .credito-header {
             display: flex;
             justify-content: space-between;
@@ -1157,14 +1162,14 @@ Funciones::mostrarAlertaSesion();
             padding-bottom: 10px;
             border-bottom: 2px solid #ffd54f;
         }
-        
+
         .credito-actions {
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 15px;
             margin-top: 15px;
         }
-        
+
         .btn-reducir {
             background: linear-gradient(135deg, #28a745, #1e7e34);
             border: none;
@@ -1179,12 +1184,12 @@ Funciones::mostrarAlertaSesion();
             justify-content: center;
             gap: 8px;
         }
-        
+
         .btn-reducir:hover {
             transform: translateY(-2px);
             box-shadow: 0 5px 15px rgba(40, 167, 69, 0.3);
         }
-        
+
         .btn-recargar {
             background: linear-gradient(135deg, #007bff, #0056b3);
             border: none;
@@ -1199,19 +1204,19 @@ Funciones::mostrarAlertaSesion();
             justify-content: center;
             gap: 8px;
         }
-        
+
         .btn-recargar:hover {
             transform: translateY(-2px);
             box-shadow: 0 5px 15px rgba(0, 123, 255, 0.3);
         }
-        
+
         .credito-info {
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 15px;
             margin-bottom: 15px;
         }
-        
+
         .credito-card {
             background: white;
             border-radius: 10px;
@@ -1220,28 +1225,28 @@ Funciones::mostrarAlertaSesion();
             box-shadow: 0 3px 10px rgba(0, 0, 0, 0.08);
             border: 1px solid #e9ecef;
         }
-        
+
         .credito-card .valor {
             font-size: 1.5rem;
             font-weight: 700;
             margin: 10px 0;
         }
-        
+
         .deuda-valor {
             color: #dc3545;
         }
-        
+
         .limite-valor {
             color: #007bff;
         }
-        
+
         .credito-input {
             display: flex;
             align-items: center;
             gap: 10px;
             margin-top: 10px;
         }
-        
+
         .credito-input input {
             flex: 1;
             padding: 10px;
@@ -1250,34 +1255,34 @@ Funciones::mostrarAlertaSesion();
             font-size: 1rem;
             transition: all 0.3s;
         }
-        
+
         .credito-input input:focus {
             border-color: #007bff;
             box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.25);
             outline: none;
         }
-        
+
         .credito-modal .modal-content {
             border-radius: 15px;
             overflow: hidden;
         }
-        
+
         .credito-modal .modal-header {
             background: linear-gradient(135deg, #007bff, #0056b3);
             color: white;
             border-bottom: none;
         }
-        
+
         .credito-modal .modal-body {
             padding: 25px;
         }
-        
+
         /* Responsive para sección crédito */
         @media (max-width: 768px) {
             .credito-actions {
                 grid-template-columns: 1fr;
             }
-            
+
             .credito-info {
                 grid-template-columns: 1fr;
             }
@@ -1474,7 +1479,7 @@ Funciones::mostrarAlertaSesion();
                                 Acciones Cliente
                             </span>
                         </div>
-                        
+
                         <div class="credito-info">
                             <div class="credito-card">
                                 <div class="titulo">
@@ -1484,7 +1489,7 @@ Funciones::mostrarAlertaSesion();
                                 <div id="creditoDeuda" class="valor deuda-valor">Bs 0.00</div>
                                 <div class="text-muted small">Saldo pendiente</div>
                             </div>
-                            
+
                             <div class="credito-card">
                                 <div class="titulo">
                                     <i class="fas fa-credit-card text-primary me-2"></i>
@@ -1494,7 +1499,7 @@ Funciones::mostrarAlertaSesion();
                                 <div class="text-muted small">Crédito disponible</div>
                             </div>
                         </div>
-                        
+
                         <div id="accionReducir" style="display: none;">
                             <label class="form-label fw-bold">
                                 <i class="fas fa-hand-holding-usd me-1"></i>
@@ -1504,17 +1509,17 @@ Funciones::mostrarAlertaSesion();
                                 El monto pagado se restará de la deuda y se sumará al límite de crédito.
                             </p>
                             <div class="credito-input">
-                                <input type="number" id="montoReducir" 
-                                       class="form-control" 
-                                       placeholder="Monto a pagar"
-                                       min="0.01" step="0.01">
+                                <input type="number" id="montoReducir"
+                                    class="form-control"
+                                    placeholder="Monto a pagar"
+                                    min="0.01" step="0.01">
                                 <button class="btn-reducir" onclick="reducirDeuda()">
                                     <i class="fas fa-check-circle"></i>
                                     Pagar Deuda
                                 </button>
                             </div>
                         </div>
-                        
+
                         <div id="accionRecargar">
                             <label class="form-label fw-bold">
                                 <i class="fas fa-plus-circle me-1"></i>
@@ -1524,10 +1529,10 @@ Funciones::mostrarAlertaSesion();
                                 Aumentar el límite de crédito disponible.
                             </p>
                             <div class="credito-input">
-                                <input type="number" id="montoRecargar" 
-                                       class="form-control" 
-                                       placeholder="Monto a recargar"
-                                       min="0.01" step="0.01">
+                                <input type="number" id="montoRecargar"
+                                    class="form-control"
+                                    placeholder="Monto a recargar"
+                                    min="0.01" step="0.01">
                                 <button class="btn-recargar" onclick="recargarCredito()">
                                     <i class="fas fa-plus"></i>
                                     Recargar
@@ -1653,11 +1658,6 @@ Funciones::mostrarAlertaSesion();
                 </div>
                 <div class="modal-body">
                     <form id="formDescripcion" onsubmit="confirmarAccionCredito(event)">
-                        <div class="mb-3">
-                            <label class="form-label">Descripción (opcional)</label>
-                            <textarea id="descripcionInput" class="form-control" rows="3"
-                                placeholder="Ej: Pago en efectivo, Transferencia bancaria, etc."></textarea>
-                        </div>
                         <input type="hidden" id="accionCredito">
                         <input type="hidden" id="montoCredito">
                         <button type="submit" class="btn btn-success w-100">
@@ -1712,18 +1712,18 @@ Funciones::mostrarAlertaSesion();
             const select = document.getElementById('clienteSelect');
             const clienteId = select.value;
             const seccionCredito = document.getElementById('creditoSection');
-            
+
             if (clienteId > 0) {
                 seccionCredito.style.display = 'block';
-                
+
                 const option = select.options[select.selectedIndex];
                 const deuda = parseFloat(option.dataset.deuda) || 0;
                 const limite = parseFloat(option.dataset.limite) || 0;
-                
+
                 // Actualizar valores
                 document.getElementById('creditoDeuda').textContent = formatearMonedaBolivianos(deuda);
                 document.getElementById('creditoLimite').textContent = formatearMonedaBolivianos(limite);
-                
+
                 // Mostrar/ocultar sección de reducir deuda
                 const accionReducir = document.getElementById('accionReducir');
                 if (deuda > 0) {
@@ -1733,7 +1733,7 @@ Funciones::mostrarAlertaSesion();
                 } else {
                     accionReducir.style.display = 'none';
                 }
-                
+
                 // Configurar máximo para recarga
                 document.getElementById('montoRecargar').value = '';
             } else {
@@ -1746,33 +1746,33 @@ Funciones::mostrarAlertaSesion();
             const clienteId = document.getElementById('clienteSelect').value;
             const montoInput = document.getElementById('montoReducir');
             const monto = parseFloat(montoInput.value);
-            
+
             if (clienteId <= 0) {
                 mostrarToast('Seleccione un cliente primero', 'warning');
                 return;
             }
-            
+
             if (!monto || monto <= 0) {
                 mostrarToast('Ingrese un monto válido', 'warning');
                 montoInput.focus();
                 return;
             }
-            
+
             const option = document.getElementById('clienteSelect').options[document.getElementById('clienteSelect').selectedIndex];
             const deudaActual = parseFloat(option.dataset.deuda) || 0;
-            
+
             if (monto > deudaActual) {
                 mostrarToast(`El monto no puede superar la deuda actual (${formatearMonedaBolivianos(deudaActual)})`, 'warning');
                 montoInput.value = deudaActual;
                 montoInput.focus();
                 return;
             }
-            
+
             // Mostrar modal para descripción
             document.getElementById('accionCredito').value = 'reducir_deuda';
             document.getElementById('montoCredito').value = monto;
-            document.getElementById('descripcionInput').value = 'Pago de deuda';
-            
+            // document.getElementById('descripcionInput').value = 'Pago de deuda';
+
             const modal = new bootstrap.Modal(document.getElementById('descripcionModal'));
             modal.show();
         }
@@ -1782,23 +1782,23 @@ Funciones::mostrarAlertaSesion();
             const clienteId = document.getElementById('clienteSelect').value;
             const montoInput = document.getElementById('montoRecargar');
             const monto = parseFloat(montoInput.value);
-            
+
             if (clienteId <= 0) {
                 mostrarToast('Seleccione un cliente primero', 'warning');
                 return;
             }
-            
+
             if (!monto || monto <= 0) {
                 mostrarToast('Ingrese un monto válido', 'warning');
                 montoInput.focus();
                 return;
             }
-            
+
             // Mostrar modal para descripción
             document.getElementById('accionCredito').value = 'recargar_credito';
             document.getElementById('montoCredito').value = monto;
-            document.getElementById('descripcionInput').value = 'Recarga de crédito';
-            
+            // document.getElementById('descripcionInput').value = 'Recarga de crédito';
+
             const modal = new bootstrap.Modal(document.getElementById('descripcionModal'));
             modal.show();
         }
@@ -1806,18 +1806,18 @@ Funciones::mostrarAlertaSesion();
         // Confirmar acción de crédito
         async function confirmarAccionCredito(event) {
             event.preventDefault();
-            
+
             const accion = document.getElementById('accionCredito').value;
             const monto = document.getElementById('montoCredito').value;
-            const descripcion = document.getElementById('descripcionInput').value;
+            // const descripcion = document.getElementById('descripcionInput').value;
             const clienteId = document.getElementById('clienteSelect').value;
-            
+
             const formData = new FormData();
             formData.append('accion', accion);
             formData.append('cliente_id', clienteId);
             formData.append('monto', monto);
-            formData.append('descripcion', descripcion);
-            
+            // formData.append('descripcion', descripcion);
+
             try {
                 const response = await fetch('modulo_ventas.php', {
                     method: 'POST',
@@ -1829,36 +1829,36 @@ Funciones::mostrarAlertaSesion();
                 if (data.success) {
                     // Cerrar modal
                     bootstrap.Modal.getInstance(document.getElementById('descripcionModal')).hide();
-                    
+
                     // Actualizar select
                     const select = document.getElementById('clienteSelect');
                     const option = select.options[select.selectedIndex];
-                    
+
                     if (accion === 'reducir_deuda') {
                         option.dataset.deuda = data.cliente.saldo_deuda;
                         option.dataset.limite = data.cliente.limite_credito;
-                        
+
                         // Actualizar texto en el option
                         const nombre = option.dataset.nombre;
                         option.textContent = nombre;
                         if (data.cliente.saldo_deuda > 0) {
                             option.textContent += ` (Deuda: ${formatearMonedaBolivianos(data.cliente.saldo_deuda)})`;
                         }
-                        
+
                         mostrarToast(`Pago realizado: ${formatearMonedaBolivianos(data.pago_realizado)}`, 'success');
                     } else {
                         option.dataset.limite = data.cliente.limite_credito;
                         mostrarToast(`Crédito recargado: ${formatearMonedaBolivianos(monto)}`, 'success');
                     }
-                    
+
                     // Limpiar inputs
                     document.getElementById('montoReducir').value = '';
                     document.getElementById('montoRecargar').value = '';
-                    
+
                     // Actualizar UI
                     actualizarInfoCliente();
                     actualizarSeccionCredito();
-                    
+
                 } else {
                     throw new Error(data.error || 'Error desconocido');
                 }
@@ -1962,7 +1962,7 @@ Funciones::mostrarAlertaSesion();
             };
 
             const index = carrito.findIndex(item => item.id === producto.id);
-            
+
             if (index !== -1) {
                 if (carrito[index].cantidad < producto.stock) {
                     carrito[index].cantidad++;
@@ -1979,7 +1979,7 @@ Funciones::mostrarAlertaSesion();
 
             actualizarCarritoUI();
             guardarCarritoStorage();
-            
+
             productoElement.classList.add('selected');
             setTimeout(() => productoElement.classList.remove('selected'), 500);
         }
