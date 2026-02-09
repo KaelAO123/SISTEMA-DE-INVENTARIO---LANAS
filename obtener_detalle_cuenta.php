@@ -51,11 +51,11 @@ try {
                 'cliente_nombre' => htmlspecialchars($detalle['cliente_nombre']),
                 'telefono' => $detalle['telefono'],
                 'fecha_hora_formateada' => Funciones::formatearFecha($detalle['fecha_hora'], 'd/m/Y H:i:s'),
-                'monto_formateado' => Funciones::formatearMoneda($detalle['monto']),
-                'saldo_anterior_formateado' => Funciones::formatearMoneda($detalle['saldo_anterior']),
-                'saldo_nuevo_formateado' => Funciones::formatearMoneda($detalle['saldo_nuevo']),
+                'monto_formateado' => Funciones::formatearMonedaBolivianos($detalle['monto']),
+                'saldo_anterior_formateado' => Funciones::formatearMonedaBolivianos($detalle['saldo_anterior']),
+                'saldo_nuevo_formateado' => Funciones::formatearMonedaBolivianos($detalle['saldo_nuevo']),
                 'diferencia' => $detalle['saldo_anterior'] - $detalle['saldo_nuevo'],
-                'diferencia_formateado' => Funciones::formatearMoneda($detalle['saldo_anterior'] - $detalle['saldo_nuevo']),
+                'diferencia_formateado' => Funciones::formatearMonedaBolivianos($detalle['saldo_anterior'] - $detalle['saldo_nuevo']),
                 'metodo_pago' => $detalle['metodo_pago'],
                 'referencia_pago' => $detalle['referencia_pago'],
                 'usuario_nombre' => htmlspecialchars($detalle['usuario_nombre']),
@@ -67,9 +67,9 @@ try {
         if ($detalle['codigo_venta']) {
             $respuesta['detalle']['venta_info'] = [
                 'codigo' => $detalle['codigo_venta'],
-                'total' => Funciones::formatearMoneda($detalle['venta_total']),
-                'pagado' => Funciones::formatearMoneda($detalle['venta_pagado']),
-                'debe' => Funciones::formatearMoneda($detalle['venta_debe'])
+                'total' => Funciones::formatearMonedaBolivianos($detalle['venta_total']),
+                'pagado' => Funciones::formatearMonedaBolivianos($detalle['venta_pagado']),
+                'debe' => Funciones::formatearMonedaBolivianos($detalle['venta_debe'])
             ];
         }
         
@@ -99,11 +99,11 @@ try {
                 'proveedor_nombre' => htmlspecialchars($detalle['proveedor_nombre']),
                 'telefono' => $detalle['telefono'],
                 'fecha_hora_formateada' => Funciones::formatearFecha($detalle['fecha_hora'], 'd/m/Y H:i:s'),
-                'monto_formateado' => Funciones::formatearMoneda($detalle['monto']),
-                'saldo_anterior_formateado' => Funciones::formatearMoneda($detalle['saldo_anterior']),
-                'saldo_nuevo_formateado' => Funciones::formatearMoneda($detalle['saldo_nuevo']),
+                'monto_formateado' => Funciones::formatearMonedaBolivianos($detalle['monto']),
+                'saldo_anterior_formateado' => Funciones::formatearMonedaBolivianos($detalle['saldo_anterior']),
+                'saldo_nuevo_formateado' => Funciones::formatearMonedaBolivianos($detalle['saldo_nuevo']),
                 'diferencia' => $detalle['saldo_anterior'] - $detalle['saldo_nuevo'],
-                'diferencia_formateado' => Funciones::formatearMoneda($detalle['saldo_anterior'] - $detalle['saldo_nuevo']),
+                'diferencia_formateado' => Funciones::formatearMonedaBolivianos($detalle['saldo_anterior'] - $detalle['saldo_nuevo']),
                 'metodo_pago' => $detalle['metodo_pago'],
                 'referencia_pago' => $detalle['referencia_pago'],
                 'usuario_nombre' => htmlspecialchars($detalle['usuario_nombre']),

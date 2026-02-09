@@ -7,8 +7,6 @@ Funciones::verificarSesion();
 $db = getDB();
 $venta = null;
 $detalles = [];
-$cliente = null;
-$vendedor = null;
 $error = '';
 
 // Obtener ID de venta
@@ -57,541 +55,628 @@ if ($venta_id > 0) {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Recibo de Venta #<?php echo $venta['codigo_venta'] ?? ''; ?></title>
     
-    <!-- Bootstrap 5 -->
+    <!-- Bootstrap 5 (solo para pantalla) -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <!-- Font Awesome -->
+    <!-- Font Awesome para íconos -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
     <style>
-        @media print {
-            @page {
-                margin: 0.5cm;
-                size: letter;
-            }
-            
+        /* ===== ESTILOS BASE PARA TODO ===== */
+        body {
+            font-family: 'Courier New', monospace !important;
+            background: white !important;
+            color: black !important;
+            margin: 0;
+            padding: 10px;
+        }
+        
+        /* Contenedor principal */
+        .recibo-container {
+            width: 80mm;
+            max-width: 80mm;
+            min-width: 80mm;
+            margin: 0 auto;
+            padding: 2mm;
+            background: white;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            border: 1px solid #ccc;
+            page-break-inside: avoid;
+        }
+        
+        /* Header */
+        .header-recibo {
+            text-align: center;
+            padding-bottom: 3px;
+            margin-bottom: 3px;
+            border-bottom: 1px solid #000;
+        }
+        
+        .empresa-nombre {
+            font-size: 11px;
+            font-weight: bold;
+            text-transform: uppercase;
+            margin: 0;
+            line-height: 1.1;
+        }
+        
+        .empresa-desc {
+            font-size: 8px;
+            margin: 1px 0;
+        }
+        
+        .titulo-recibo {
+            font-size: 10px;
+            font-weight: bold;
+            margin: 2px 0;
+        }
+        
+        .codigo-recibo {
+            font-size: 9px;
+            font-weight: bold;
+        }
+        
+        /* Información general */
+        .info-recibo {
+            margin: 3px 0;
+        }
+        
+        .info-linea {
+            display: flex;
+            justify-content: space-between;
+            margin: 1px 0;
+            padding: 0;
+            font-size: 8px;
+        }
+        
+        .info-label {
+            font-weight: bold;
+            white-space: nowrap;
+        }
+        
+        .info-value {
+            text-align: right;
+            max-width: 45mm;
+            word-break: break-word;
+        }
+        
+        /* Líneas divisorias */
+        .linea-divisoria {
+            border-top: 1px dashed #000;
+            margin: 3px 0;
+        }
+        
+        .linea-doble {
+            border-top: 2px solid #000;
+            margin: 4px 0;
+        }
+        
+        .linea-separador {
+            text-align: center;
+            font-size: 8px;
+            margin: 2px 0;
+        }
+        
+        /* Tabla de productos */
+        .tabla-productos {
+            width: 100%;
+            margin: 3px 0;
+            border-collapse: collapse;
+        }
+        
+        .tabla-productos thead th {
+            border-bottom: 1px solid #000;
+            padding: 1px 0;
+            font-size: 7px;
+            font-weight: bold;
+            text-align: left;
+        }
+        
+        .tabla-productos tbody td {
+            padding: 1px 0;
+            font-size: 7px;
+            border-bottom: 1px dotted #ccc;
+            vertical-align: top;
+        }
+        
+        .texto-derecha {
+            text-align: right;
+        }
+        
+        .texto-centro {
+            text-align: center;
+        }
+        
+        /* Totales */
+        .seccion-totales {
+            margin: 4px 0;
+            padding-top: 3px;
+        }
+        
+        .linea-total {
+            display: flex;
+            justify-content: space-between;
+            margin: 1px 0;
+            padding: 1px 0;
+            font-size: 8px;
+        }
+        
+        .total-final {
+            font-size: 9px;
+            font-weight: bold;
+            border-top: 1px solid #000;
+            margin-top: 2px;
+            padding-top: 2px;
+        }
+        
+        /* Estado */
+        .estado-recibo {
+            border: 1px solid #000;
+            padding: 0 4px;
+            font-weight: bold;
+            font-size: 8px;
+            background: white !important;
+            color: black !important;
+        }
+        
+        /* Observaciones */
+        .observaciones {
+            margin: 3px 0;
+            padding: 2px;
+            font-size: 7px;
+        }
+        
+        /* Footer */
+        .footer-recibo {
+            margin-top: 5px;
+            padding-top: 3px;
+            border-top: 1px dashed #000;
+            text-align: center;
+            font-size: 7px;
+        }
+        
+        /* Firma */
+        .firma-recibo {
+            margin-top: 8px;
+            text-align: center;
+        }
+        
+        .linea-firma {
+            border-top: 1px solid #000;
+            width: 50mm;
+            margin: 5px auto 0 auto;
+            padding-top: 2px;
+            font-size: 7px;
+        }
+        
+        /* ===== ESTILOS ESPECÍFICOS PARA PANTALLA ===== */
+        @media screen {
             body {
-                margin: 0;
-                padding: 0;
+                background: #f5f5f5 !important;
+                padding: 20px;
             }
             
-            .no-print {
-                display: none !important;
+            .recibo-container {
+                box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+                border: 1px solid #999;
+            }
+            
+            /* Botones flotantes */
+            .botones-accion {
+                position: fixed;
+                bottom: 30px;
+                right: 30px;
+                display: flex;
+                flex-direction: column;
+                gap: 15px;
+                z-index: 1000;
+            }
+            
+            .boton-accion {
+                width: 60px;
+                height: 60px;
+                border-radius: 50%;
+                border: 2px solid #000;
+                color: #000;
+                font-size: 1.5rem;
+                cursor: pointer;
+                background: white;
+                box-shadow: 0 3px 8px rgba(0,0,0,0.3);
+                transition: all 0.3s;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                position: relative;
+            }
+            
+            .boton-accion:hover {
+                transform: translateY(-3px);
+                box-shadow: 0 5px 12px rgba(0,0,0,0.4);
+            }
+            
+            .boton-accion:hover::after {
+                content: attr(title);
+                position: absolute;
+                right: 70px;
+                top: 50%;
+                transform: translateY(-50%);
+                background: #000;
+                color: white;
+                padding: 6px 12px;
+                border-radius: 4px;
+                font-size: 12px;
+                font-family: Arial, sans-serif;
+                white-space: nowrap;
+                z-index: 1001;
+            }
+            
+            .boton-imprimir {
+                border-color: #000;
+            }
+            
+            .boton-pdf {
+                border-color: #333;
+            }
+            
+            .boton-volver {
+                border-color: #666;
+            }
+            
+            /* Notificaciones */
+            .notificacion {
+                position: fixed;
+                top: 20px;
+                left: 50%;
+                transform: translateX(-50%);
+                padding: 10px 20px;
+                border-radius: 3px;
+                background: #000;
+                color: white;
+                font-size: 12px;
+                font-weight: bold;
+                z-index: 9999;
+                animation: mostrarNotificacion 0.3s ease-out;
+                box-shadow: 0 3px 6px rgba(0,0,0,0.2);
+                font-family: Arial, sans-serif;
+            }
+            
+            @keyframes mostrarNotificacion {
+                from {
+                    transform: translate(-50%, -20px);
+                    opacity: 0;
+                }
+                to {
+                    transform: translate(-50%, 0);
+                    opacity: 1;
+                }
+            }
+        }
+        
+        /* ===== ESTILOS PARA IMPRESIÓN ===== */
+        @media print {
+            body {
+                background: white !important;
+                padding: 0 !important;
+                margin: 0 !important;
             }
             
             .recibo-container {
                 box-shadow: none !important;
                 border: none !important;
-                page-break-after: avoid;
+                width: 80mm !important;
+                margin: 0 auto !important;
             }
-        }
-        
-        @media screen {
-            body {
-                background: linear-gradient(135deg, #f5f5f5 0%, #e8f5e9 100%);
-                padding: 20px;
+            
+            .botones-accion {
+                display: none !important;
             }
-        }
-        
-        .recibo-container {
-            max-width: 800px;
-            margin: 0 auto;
-            background: white;
-            padding: 40px;
-            box-shadow: 0 0 20px rgba(0,0,0,0.1);
-            border-radius: 10px;
-        }
-        
-        .recibo-header {
-            text-align: center;
-            border-bottom: 3px solid #28a745;
-            padding-bottom: 20px;
-            margin-bottom: 30px;
-        }
-        
-        .recibo-header h1 {
-            color: #28a745;
-            font-size: 2.5rem;
-            margin-bottom: 10px;
-            font-weight: bold;
-        }
-        
-        .recibo-header .subtitle {
-            color: #666;
-            font-size: 1.2rem;
-        }
-        
-        .info-section {
-            margin-bottom: 30px;
-        }
-        
-        .info-row {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 10px;
-            padding: 10px;
-            background: #f8f9fa;
-            border-radius: 5px;
-        }
-        
-        .info-label {
-            font-weight: bold;
-            color: #333;
-        }
-        
-        .info-value {
-            color: #666;
-        }
-        
-        .productos-table {
-            width: 100%;
-            margin-bottom: 30px;
-            border-collapse: collapse;
-        }
-        
-        .productos-table thead {
-            background: #28a745;
-            color: white;
-        }
-        
-        .productos-table th,
-        .productos-table td {
-            padding: 12px;
-            text-align: left;
-            border-bottom: 1px solid #dee2e6;
-        }
-        
-        .productos-table th {
-            font-weight: bold;
-            text-transform: uppercase;
-            font-size: 0.9rem;
-        }
-        
-        .productos-table tbody tr:hover {
-            background: #f8f9fa;
-        }
-        
-        .productos-table .text-end {
-            text-align: right;
-        }
-        
-        .productos-table .text-center {
-            text-align: center;
-        }
-        
-        .totales-section {
-            margin-top: 30px;
-            padding-top: 20px;
-            border-top: 2px solid #dee2e6;
-        }
-        
-        .total-row {
-            display: flex;
-            justify-content: space-between;
-            padding: 8px 0;
-            font-size: 1.1rem;
-        }
-        
-        .total-row.final {
-            font-size: 1.5rem;
-            font-weight: bold;
-            color: #28a745;
-            border-top: 3px solid #28a745;
-            padding-top: 15px;
-            margin-top: 10px;
-        }
-        
-        .footer-section {
-            margin-top: 50px;
-            padding-top: 30px;
-            border-top: 2px dashed #dee2e6;
-            text-align: center;
-            color: #666;
-        }
-        
-        .firma {
-            margin-top: 50px;
-            padding-top: 20px;
-        }
-        
-        .firma-linea {
-            border-top: 2px solid #333;
-            width: 300px;
-            margin: 0 auto;
-            padding-top: 10px;
-        }
-        
-        .btn-actions {
-            position: fixed;
-            bottom: 30px;
-            right: 30px;
-            display: flex;
-            gap: 10px;
-            z-index: 1000;
-        }
-        
-        .btn-action {
-            width: 60px;
-            height: 60px;
-            border-radius: 50%;
-            border: none;
-            color: white;
-            font-size: 1.5rem;
-            cursor: pointer;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
-            transition: all 0.3s;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-        
-        .btn-action:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 8px 20px rgba(0,0,0,0.4);
-        }
-        
-        .btn-print {
-            background: linear-gradient(135deg, #007bff, #0056b3);
-        }
-        
-        .btn-pdf {
-            background: linear-gradient(135deg, #dc3545, #c82333);
-        }
-        
-        .btn-back {
-            background: linear-gradient(135deg, #6c757d, #5a6268);
-        }
-        
-        .badge-estado {
-            padding: 8px 15px;
-            border-radius: 20px;
-            font-size: 0.9rem;
-            font-weight: bold;
-        }
-        
-        .badge-pagada {
-            background: #d4edda;
-            color: #155724;
-        }
-        
-        .badge-pendiente {
-            background: #fff3cd;
-            color: #856404;
-        }
-        
-        .badge-anulada {
-            background: #f8d7da;
-            color: #721c24;
-        }
-        
-        .alert-error {
-            background: #f8d7da;
-            border: 1px solid #f5c6cb;
-            color: #721c24;
-            padding: 20px;
-            border-radius: 10px;
-            margin: 20px 0;
         }
     </style>
 </head>
 <body>
     <?php if ($error): ?>
         <div class="recibo-container">
-            <div class="alert-error text-center">
-                <i class="fas fa-exclamation-triangle fa-3x mb-3"></i>
-                <h3>Error</h3>
-                <p><?php echo htmlspecialchars($error); ?></p>
-                <button class="btn btn-primary mt-3" onclick="window.location.href='modulo_ventas.php'">
-                    <i class="fas fa-arrow-left me-2"></i> Volver al Punto de Venta
+            <div class="text-center py-4">
+                <div class="linea-doble"></div>
+                <div class="titulo-recibo">ERROR</div>
+                <div class="linea-divisoria"></div>
+                <div class="info-recibo">
+                    <div class="info-linea">
+                        <span class="info-label">Mensaje:</span>
+                        <span class="info-value"><?php echo htmlspecialchars($error); ?></span>
+                    </div>
+                </div>
+                <div class="linea-doble"></div>
+                <button class="boton-accion boton-volver mt-3" onclick="window.location.href='modulo_ventas.php'" title="Volver">
+                    ←
                 </button>
             </div>
         </div>
     <?php else: ?>
+        <!-- RECIBO PRINCIPAL - MISMO FORMATO PARA TODO -->
         <div class="recibo-container" id="reciboContent">
             <!-- Header -->
-            <div class="recibo-header">
-                <h1><i class="fas fa-receipt me-2"></i>RECIBO DE VENTA</h1>
-                <div class="subtitle">LANAS Y TEXTILES</div>
-                <div class="mt-3">
-                    <strong>Código:</strong> <?php echo htmlspecialchars($venta['codigo_venta']); ?>
+            <div class="header-recibo">
+                <div class="empresa-nombre">LANAS Y TEXTILES</div>
+                <div class="empresa-desc">Tienda de Lanas y Materiales</div>
+                <div class="linea-doble"></div>
+                <div class="titulo-recibo">RECIBO DE VENTA</div>
+                <div class="codigo-recibo">Código: <?php echo htmlspecialchars($venta['codigo_venta']); ?></div>
+            </div>
+            
+            <!-- Información general -->
+            <div class="info-recibo">
+                <div class="info-linea">
+                    <span class="info-label">FECHA/HORA:</span>
+                    <span class="info-value"><?php echo date('d/m/Y H:i', strtotime($venta['fecha_hora'])); ?></span>
+                </div>
+                
+                <div class="info-linea">
+                    <span class="info-label">CLIENTE:</span>
+                    <span class="info-value"><?php echo htmlspecialchars($venta['cliente_nombre'] ?? 'CONSUMIDOR FINAL'); ?></span>
+                </div>
+                
+                <?php if ($venta['cliente_telefono']): ?>
+                <div class="info-linea">
+                    <span class="info-label">TELÉFONO:</span>
+                    <span class="info-value"><?php echo htmlspecialchars($venta['cliente_telefono']); ?></span>
+                </div>
+                <?php endif; ?>
+                
+                <div class="info-linea">
+                    <span class="info-label">VENDEDOR:</span>
+                    <span class="info-value"><?php echo htmlspecialchars($venta['vendedor_nombre'] ?? 'N/A'); ?></span>
+                </div>
+                
+                <div class="info-linea">
+                    <span class="info-label">PAGO:</span>
+                    <span class="info-value"><?php echo htmlspecialchars(strtoupper($venta['tipo_pago'])); ?></span>
+                </div>
+                
+                <div class="info-linea">
+                    <span class="info-label">ESTADO:</span>
+                    <span class="info-value">
+                        <span class="estado-recibo"><?php echo strtoupper($venta['estado']); ?></span>
+                    </span>
                 </div>
             </div>
             
-            <!-- Información General -->
-            <div class="info-section">
-                <div class="row">
-                    <div class="col-md-6">
-                        <div class="info-row">
-                            <span class="info-label">
-                                <i class="fas fa-calendar me-2"></i>Fecha:
-                            </span>
-                            <span class="info-value">
-                                <?php echo date('d/m/Y H:i', strtotime($venta['fecha_hora'])); ?>
-                            </span>
-                        </div>
-                        
-                        <div class="info-row">
-                            <span class="info-label">
-                                <i class="fas fa-user me-2"></i>Cliente:
-                            </span>
-                            <span class="info-value">
-                                <?php echo htmlspecialchars($venta['cliente_nombre'] ?? 'Consumidor Final'); ?>
-                            </span>
-                        </div>
-                        
-                        <?php if ($venta['cliente_telefono']): ?>
-                        <div class="info-row">
-                            <span class="info-label">
-                                <i class="fas fa-phone me-2"></i>Teléfono:
-                            </span>
-                            <span class="info-value">
-                                <?php echo htmlspecialchars($venta['cliente_telefono']); ?>
-                            </span>
-                        </div>
-                        <?php endif; ?>
-                    </div>
-                    
-                    <div class="col-md-6">
-                        <div class="info-row">
-                            <span class="info-label">
-                                <i class="fas fa-user-tie me-2"></i>Vendedor:
-                            </span>
-                            <span class="info-value">
-                                <?php echo htmlspecialchars($venta['vendedor_nombre'] ?? 'N/A'); ?>
-                            </span>
-                        </div>
-                        
-                        <div class="info-row">
-                            <span class="info-label">
-                                <i class="fas fa-credit-card me-2"></i>Tipo de Pago:
-                            </span>
-                            <span class="info-value text-uppercase">
-                                <?php echo htmlspecialchars($venta['tipo_pago']); ?>
-                            </span>
-                        </div>
-                        
-                        <div class="info-row">
-                            <span class="info-label">
-                                <i class="fas fa-info-circle me-2"></i>Estado:
-                            </span>
-                            <span class="info-value">
-                                <span class="badge-estado badge-<?php echo $venta['estado']; ?>">
-                                    <?php echo strtoupper($venta['estado']); ?>
-                                </span>
-                            </span>
-                        </div>
-                    </div>
-                </div>
-            </div>
+            <div class="linea-divisoria"></div>
             
-            <!-- Tabla de Productos -->
-            <h4 class="mb-3"><i class="fas fa-shopping-bag me-2"></i>Productos</h4>
-            <table class="productos-table">
+            <!-- Tabla de productos -->
+            <div class="titulo-recibo">PRODUCTOS:</div>
+            <table class="tabla-productos">
                 <thead>
                     <tr>
-                        <th>#</th>
-                        <th>Producto</th>
-                        <th>Código</th>
-                        <th class="text-center">Cantidad</th>
-                        <th class="text-end">Precio Unit.</th>
-                        <th class="text-end">Subtotal</th>
+                        <th>DESCRIPCIÓN</th>
+                        <th class="texto-centro">CANT</th>
+                        <th class="texto-derecha">TOTAL</th>
                     </tr>
                 </thead>
                 <tbody>
-                    <?php $num = 1; ?>
                     <?php foreach ($detalles as $detalle): ?>
                         <tr>
-                            <td><?php echo $num++; ?></td>
-                            <td><?php echo htmlspecialchars($detalle['nombre_color']); ?></td>
-                            <td><?php echo htmlspecialchars($detalle['codigo_color']); ?></td>
-                            <td class="text-center"><?php echo $detalle['cantidad']; ?></td>
-                            <td class="text-end"><?php echo Funciones::formatearMoneda($detalle['precio_unitario']); ?></td>
-                            <td class="text-end"><?php echo Funciones::formatearMoneda($detalle['subtotal']); ?></td>
+                            <td>
+                                <?php echo htmlspecialchars($detalle['nombre_color']); ?><br>
+                                <span style="font-size: 6px;"><?php echo htmlspecialchars($detalle['codigo_color']); ?></span>
+                            </td>
+                            <td class="texto-centro"><?php echo $detalle['cantidad']; ?></td>
+                            <td class="texto-derecha"><?php echo Funciones::formatearMonedaBolivianos($detalle['subtotal']); ?></td>
                         </tr>
                     <?php endforeach; ?>
                 </tbody>
             </table>
             
+            <div class="linea-divisoria"></div>
+            
             <!-- Totales -->
-            <div class="totales-section">
-                <div class="row">
-                    <div class="col-md-6">
-                        <?php if ($venta['observaciones']): ?>
-                            <div class="alert alert-info">
-                                <strong><i class="fas fa-sticky-note me-2"></i>Observaciones:</strong><br>
-                                <?php echo nl2br(htmlspecialchars($venta['observaciones'])); ?>
-                            </div>
-                        <?php endif; ?>
-                    </div>
-                    
-                    <div class="col-md-6">
-                        <?php if ($venta['descuento'] > 0): ?>
-                        <div class="total-row">
-                            <span>Subtotal:</span>
-                            <span><?php echo Funciones::formatearMoneda($venta['subtotal'] + $venta['descuento']); ?></span>
-                        </div>
-                        
-                        <div class="total-row text-danger">
-                            <span>Descuento:</span>
-                            <span>-<?php echo Funciones::formatearMoneda($venta['descuento']); ?></span>
-                        </div>
-                        <?php endif; ?>
-                        
-                        <div class="total-row">
-                            <span>Subtotal Neto:</span>
-                            <span><?php echo Funciones::formatearMoneda($venta['subtotal']); ?></span>
-                        </div>
-                        
-                        <div class="total-row">
-                            <span>IVA (12%):</span>
-                            <span><?php echo Funciones::formatearMoneda($venta['iva']); ?></span>
-                        </div>
-                        
-                        <div class="total-row final">
-                            <span>TOTAL:</span>
-                            <span><?php echo Funciones::formatearMoneda($venta['total']); ?></span>
-                        </div>
-                        
-                        <?php if ($venta['debe'] > 0): ?>
-                        <div class="total-row text-danger">
-                            <span>Pagado:</span>
-                            <span><?php echo Funciones::formatearMoneda($venta['pagado']); ?></span>
-                        </div>
-                        
-                        <div class="total-row text-danger">
-                            <span><strong>Saldo Pendiente:</strong></span>
-                            <span><strong><?php echo Funciones::formatearMoneda($venta['debe']); ?></strong></span>
-                        </div>
-                        <?php endif; ?>
-                    </div>
+            <div class="seccion-totales">
+                <div class="linea-total">
+                    <span>SUBTOTAL NETO:</span>
+                    <span><?php echo Funciones::formatearMonedaBolivianos($venta['subtotal']); ?></span>
                 </div>
+                
+                <?php if ($venta['descuento'] > 0): ?>
+                <div class="linea-total">
+                    <span>DESCUENTO:</span>
+                    <span>-<?php echo Funciones::formatearMonedaBolivianos($venta['descuento']); ?></span>
+                </div>
+                <?php endif; ?>
+                
+                
+                <div class="linea-separador">-------------------</div>
+                
+                <div class="linea-total total-final">
+                    <span>TOTAL A PAGAR:</span>
+                    <span><?php echo Funciones::formatearMonedaBolivianos($venta['total']); ?></span>
+                </div>
+                
+                <?php if ($venta['debe'] > 0): ?>
+                <div class="linea-separador">-------------------</div>
+                
+                <div class="linea-total">
+                    <span>PAGADO:</span>
+                    <span><?php echo Funciones::formatearMonedaBolivianos($venta['pagado']); ?></span>
+                </div>
+                
+                <div class="linea-total">
+                    <span><strong>SALDO PENDIENTE:</strong></span>
+                    <span><strong><?php echo Funciones::formatearMonedaBolivianos($venta['debe']); ?></strong></span>
+                </div>
+                <?php endif; ?>
+            </div>
+            
+            <?php if ($venta['observaciones']): ?>
+            <div class="linea-divisoria"></div>
+            <div class="observaciones">
+                <div class="info-label">OBSERVACIONES:</div>
+                <div><?php echo htmlspecialchars($venta['observaciones']); ?></div>
+            </div>
+            <?php endif; ?>
+            
+            <div class="linea-doble"></div>
+            
+            <!-- Footer -->
+            <div class="footer-recibo">
+                <div><strong>¡GRACIAS POR SU COMPRA!</strong></div>
+                <div>Conserve este recibo para cualquier reclamo</div>
+                <div class="linea-separador">---</div>
+                <div>Impreso: <?php echo date('d/m/Y H:i:s'); ?></div>
             </div>
             
             <!-- Firma -->
-            <div class="firma">
-                <div class="firma-linea">
-                    Firma del Cliente
-                </div>
+            <div class="firma-recibo">
+                <div class="linea-firma">FIRMA DEL CLIENTE</div>
             </div>
             
-            <!-- Footer -->
-            <div class="footer-section">
-                <p><strong>¡Gracias por su compra!</strong></p>
-                <p class="small text-muted">
-                    Este documento es un comprobante de venta válido<br>
-                    Conserve este recibo para cualquier reclamo
-                </p>
-                <p class="small text-muted">
-                    Impreso el: <?php echo date('d/m/Y H:i:s'); ?>
-                </p>
+            <!-- Información adicional (solo visible en PDF) -->
+            <div style="display: none; font-size: 6px; text-align: center; margin-top: 5px; border-top: 1px dotted #ccc; padding-top: 2px;" id="infoPDF">
+                Recibo generado por Sistema de Ventas - Lanas y Textiles
             </div>
         </div>
         
-        <!-- Botones de acción (no se imprimen) -->
-        <div class="btn-actions no-print">
-            <button class="btn-action btn-print" onclick="window.print()" title="Imprimir">
+        <!-- Botones de acción (solo en pantalla) -->
+        <div class="botones-accion">
+            <button class="boton-accion boton-imprimir" onclick="imprimirRecibo()" title="Imprimir Recibo">
                 <i class="fas fa-print"></i>
             </button>
             
-            <button class="btn-action btn-pdf" onclick="descargarPDF()" title="Descargar PDF">
+            <button class="boton-accion boton-pdf" onclick="descargarPDF()" title="Descargar PDF">
                 <i class="fas fa-file-pdf"></i>
             </button>
             
-            <button class="btn-action btn-back" onclick="window.location.href='modulo_ventas.php'" title="Nueva Venta">
+            <button class="boton-accion boton-volver" onclick="window.location.href='modulo_ventas.php'" title="Volver a Ventas">
                 <i class="fas fa-arrow-left"></i>
             </button>
         </div>
     <?php endif; ?>
     
-    <!-- Bootstrap JS -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    
-    <!-- jsPDF para generar PDF -->
+    <!-- jsPDF y html2canvas -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     
     <script>
-        // Descargar como PDF
-        async function descargarPDF() {
-            // Ocultar botones temporalmente
-            const buttons = document.querySelector('.btn-actions');
-            buttons.style.display = 'none';
+        // Función para imprimir el recibo
+        function imprimirRecibo() {
+            // Mostrar información adicional para impresión
+            const infoPDF = document.getElementById('infoPDF');
+            infoPDF.style.display = 'block';
             
+            // Esperar un momento para que se muestre la info
+            setTimeout(() => {
+                // Imprimir
+                window.print();
+                
+                // Ocultar información adicional después de imprimir
+                setTimeout(() => {
+                    infoPDF.style.display = 'none';
+                }, 500);
+                
+                // Mostrar notificación
+                mostrarNotificacion('Enviando a impresión...');
+            }, 100);
+        }
+        
+        // Función para descargar PDF con el mismo diseño
+        async function descargarPDF() {
             try {
-                // Capturar el contenido como imagen
-                const canvas = await html2canvas(document.getElementById('reciboContent'), {
-                    scale: 2,
+                // Mostrar notificación
+                mostrarNotificacion('Generando PDF...');
+                
+                // Mostrar información adicional para PDF
+                const infoPDF = document.getElementById('infoPDF');
+                infoPDF.style.display = 'block';
+                
+                // Obtener el elemento del recibo
+                const reciboElement = document.getElementById('reciboContent');
+                
+                // Calcular dimensiones para 80mm
+                const widthMM = 80;
+                const heightMM = reciboElement.offsetHeight * 0.264583; // Convertir px a mm
+                
+                // Configurar html2canvas
+                const canvas = await html2canvas(reciboElement, {
+                    scale: 3, // Alta resolución
                     logging: false,
-                    backgroundColor: '#ffffff'
+                    backgroundColor: '#ffffff',
+                    width: reciboElement.offsetWidth,
+                    height: reciboElement.offsetHeight,
+                    useCORS: true,
+                    allowTaint: true
                 });
                 
-                // Crear PDF
+                // Crear PDF con dimensiones exactas
                 const { jsPDF } = window.jspdf;
-                const pdf = new jsPDF('p', 'mm', 'letter');
+                const pdf = new jsPDF({
+                    orientation: 'portrait',
+                    unit: 'mm',
+                    format: [widthMM, heightMM + 5] // +5mm para margen
+                });
                 
-                const imgWidth = 210; // Ancho de página carta en mm
-                const imgHeight = (canvas.height * imgWidth) / canvas.width;
-                
+                // Agregar la imagen al PDF manteniendo proporciones
                 const imgData = canvas.toDataURL('image/png');
-                pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
+                pdf.addImage(imgData, 'PNG', 0, 0, widthMM, heightMM);
                 
-                // Descargar
+                // Descargar el PDF
                 const codigo = '<?php echo $venta['codigo_venta'] ?? 'recibo'; ?>';
-                pdf.save(`Recibo_${codigo}_${Date.now()}.pdf`);
+                pdf.save(`Recibo_${codigo}_<?php echo date('Ymd_His'); ?>.pdf`);
                 
-                // Mostrar mensaje de éxito
-                mostrarNotificacion('PDF descargado exitosamente', 'success');
+                // Ocultar información adicional
+                infoPDF.style.display = 'none';
+                
+                // Mostrar notificación de éxito
+                mostrarNotificacion('PDF descargado exitosamente');
                 
             } catch (error) {
                 console.error('Error generando PDF:', error);
-                mostrarNotificacion('Error al generar PDF', 'error');
-            } finally {
-                // Restaurar botones
-                buttons.style.display = 'flex';
+                mostrarNotificacion('Error al generar PDF');
+                
+                // Asegurarse de ocultar información adicional
+                const infoPDF = document.getElementById('infoPDF');
+                infoPDF.style.display = 'none';
             }
         }
         
-        // Mostrar notificación
-        function mostrarNotificacion(mensaje, tipo) {
-            const colores = {
-                'success': '#28a745',
-                'error': '#dc3545',
-                'info': '#17a2b8'
-            };
+        // Función para mostrar notificaciones
+        function mostrarNotificacion(mensaje) {
+            // Crear elemento de notificación
+            const notificacion = document.createElement('div');
+            notificacion.className = 'notificacion';
+            notificacion.textContent = mensaje;
+            notificacion.style.fontFamily = 'Courier New, monospace';
             
-            const notif = document.createElement('div');
-            notif.style.cssText = `
-                position: fixed;
-                top: 20px;
-                left: 50%;
-                transform: translateX(-50%);
-                background: ${colores[tipo] || colores.info};
-                color: white;
-                padding: 15px 30px;
-                border-radius: 10px;
-                box-shadow: 0 5px 15px rgba(0,0,0,0.3);
-                z-index: 9999;
-                animation: slideDown 0.3s ease-out;
-            `;
-            notif.textContent = mensaje;
+            // Agregar al body
+            document.body.appendChild(notificacion);
             
-            document.body.appendChild(notif);
-            
+            // Remover después de 2 segundos
             setTimeout(() => {
-                notif.remove();
-            }, 3000);
+                if (notificacion.parentNode) {
+                    notificacion.parentNode.removeChild(notificacion);
+                }
+            }, 2000);
         }
         
         // Auto-imprimir si viene de venta procesada
-        <?php if (isset($_SESSION['venta_procesada_id'])): ?>
-        // Preguntar si desea imprimir
-        if (confirm('¿Desea imprimir el recibo ahora?')) {
-            window.print();
-        }
+        <?php if (isset($_SESSION['venta_procesada_id']) && $_SESSION['venta_procesada_id'] == $venta_id): ?>
+        document.addEventListener('DOMContentLoaded', function() {
+            setTimeout(() => {
+                if (confirm('¿Desea imprimir el recibo ahora?')) {
+                    imprimirRecibo();
+                }
+            }, 500);
+        });
         <?php 
         unset($_SESSION['venta_procesada_id']);
         unset($_SESSION['venta_procesada_codigo']);
         endif; 
         ?>
+        
+        // Detectar tecla Ctrl+P para imprimir
+        document.addEventListener('keydown', function(e) {
+            if (e.ctrlKey && e.key === 'p') {
+                e.preventDefault();
+                imprimirRecibo();
+            }
+        });
     </script>
 </body>
 </html>

@@ -64,8 +64,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['accion'])) {
             }
             
             $subtotal_neto = $subtotal - $descuento;
-            $iva = $subtotal_neto * 0.12;
-            $total = $subtotal_neto + $iva;
+            $iva = 0;
+            $total = $subtotal_neto ;
             
             // 3. Generar código único
             $codigo_venta = 'V-' . date('Ymd') . '-' . str_pad(rand(1, 9999), 4, '0', STR_PAD_LEFT);
@@ -373,7 +373,7 @@ Funciones::mostrarAlertaSesion();
         .pos-body {
             display: flex;
             min-height: 650px;
-            max-height: calc(100vh - 200px); /* Limitar altura máxima */
+            max-height: 1500px; 
             overflow: hidden;
         }
         
@@ -1086,7 +1086,7 @@ Funciones::mostrarAlertaSesion();
                                     </div>
                                     
                                     <div class="product-price">
-                                        <?php echo Funciones::formatearMoneda($producto['precio_venta']); ?>
+                                        <?php echo Funciones::formatearMonedaBolivianos($producto['precio_venta']); ?>
                                     </div>
                                     
                                     <div class="product-stock <?php echo $stock_class; ?>">
@@ -1126,7 +1126,7 @@ Funciones::mostrarAlertaSesion();
                                         <?php echo htmlspecialchars($cliente['nombre']); ?>
                                         <?php if ($cliente['saldo_deuda'] > 0): ?>
                                             <span class="text-danger ms-2">
-                                                (Deuda: <?php echo Funciones::formatearMoneda($cliente['saldo_deuda']); ?>)
+                                                (Deuda: <?php echo Funciones::formatearMonedaBolivianos($cliente['saldo_deuda']); ?>)
                                             </span>
                                         <?php endif; ?>
                                     </option>
@@ -1163,7 +1163,7 @@ Funciones::mostrarAlertaSesion();
                         
                         <div class="summary-row">
                             <span>Subtotal:</span>
-                            <span id="subtotalDisplay">$0.00</span>
+                            <span id="subtotalDisplay">Bs 0.00</span>
                         </div>
                         
                         <div class="summary-row">
@@ -1172,18 +1172,15 @@ Funciones::mostrarAlertaSesion();
                                 <input type="number" id="descuentoInput" class="form-control form-control-sm" 
                                        value="0" min="0" step="0.01" style="width: 120px;" 
                                        onchange="actualizarTotales()">
-                                <small class="text-muted">$</small>
+                                <small class="text-muted">Bs </small>
                             </div>
                         </div>
                         
-                        <div class="summary-row">
-                            <span>IVA (12%):</span>
-                            <span id="ivaDisplay">$0.00</span>
-                        </div>
+
                         
                         <div class="summary-row summary-total">
                             <span>TOTAL:</span>
-                            <span id="totalDisplay" class="fw-bold">$0.00</span>
+                            <span id="totalDisplay" class="fw-bold">Bs 0.00</span>
                         </div>
                         
                         <!-- Método de pago -->
@@ -1420,7 +1417,7 @@ Funciones::mostrarAlertaSesion();
                     <div class="cart-item">
                         <div class="cart-item-header">
                             <div class="cart-item-name">${item.nombre}</div>
-                            <div class="cart-item-price">${formatearMoneda(item.precio)}</div>
+                            <div class="cart-item-price">${formatearMonedaBolivianos(item.precio)}</div>
                         </div>
                         <div class="cart-item-body">
                             <div class="quantity-controls">
@@ -1435,7 +1432,7 @@ Funciones::mostrarAlertaSesion();
                                 </button>
                             </div>
                             <div class="cart-item-total">
-                                ${formatearMoneda(subtotal)}
+                                ${formatearMonedaBolivianos(subtotal)}
                             </div>
                             <button class="remove-btn" onclick="eliminarDelCarrito(${index})" title="Eliminar">
                                 <i class="fas fa-trash"></i>
@@ -1510,13 +1507,11 @@ Funciones::mostrarAlertaSesion();
             });
             
             const descuento = parseFloat(document.getElementById('descuentoInput').value) || 0;
-            const totalSinIVA = Math.max(0, subtotal - descuento);
-            const iva = totalSinIVA * 0.12;
-            const total = totalSinIVA + iva;
+            const total = Math.max(0, subtotal - descuento);
             
-            document.getElementById('subtotalDisplay').textContent = formatearMoneda(subtotal);
-            document.getElementById('ivaDisplay').textContent = formatearMoneda(iva);
-            document.getElementById('totalDisplay').textContent = formatearMoneda(total);
+            document.getElementById('subtotalDisplay').textContent = formatearMonedaBolivianos(subtotal);
+            //document.getElementById('ivaDisplay').textContent = formatearMonedaBolivianos(iva);
+            document.getElementById('totalDisplay').textContent = formatearMonedaBolivianos(total);
         }
         
         // Actualizar info del cliente
@@ -1538,12 +1533,12 @@ Funciones::mostrarAlertaSesion();
                     <div class="d-flex justify-content-between">
                         <span>Deuda actual:</span>
                         <span class="${deuda > 0 ? 'text-danger fw-bold' : 'text-success'}">
-                            ${formatearMoneda(deuda)}
+                            ${formatearMonedaBolivianos(deuda)}
                         </span>
                     </div>
                     <div class="d-flex justify-content-between">
                         <span>Límite crédito:</span>
-                        <span class="text-primary">${formatearMoneda(limite)}</span>
+                        <span class="text-primary">${formatearMonedaBolivianos(limite)}</span>
                     </div>
                 `;
                 
@@ -1703,8 +1698,8 @@ Funciones::mostrarAlertaSesion();
         }
         
         // Funciones auxiliares
-        function formatearMoneda(amount) {
-            return '$' + parseFloat(amount).toFixed(2).replace(/\d(?=(\d{3})+\.)/g, '$&,');
+        function formatearMonedaBolivianos(amount) {
+            return 'Bs' + parseFloat(amount).toFixed(2).replace(/\d(?=(\d{3})+\.)/g, '$&,');
         }
         
         function mostrarToast(mensaje, tipo = 'info') {
@@ -1764,3 +1759,4 @@ Funciones::mostrarAlertaSesion();
     </script>
 </body>
 </html>
+

@@ -443,7 +443,7 @@ try {
                                         Por Cobrar
                                     </div>
                                     <div class="h5 mb-0 fw-bold">
-                                        <?php echo Funciones::formatearMoneda($total_pendiente_cobrar); ?>
+                                        <?php echo Funciones::formatearMonedaBolivianos($total_pendiente_cobrar); ?>
                                     </div>
                                     <div class="mt-2 mb-0 text-muted text-xs">
                                         <span class="text-success me-2">
@@ -469,7 +469,7 @@ try {
                                         Por Pagar
                                     </div>
                                     <div class="h5 mb-0 fw-bold">
-                                        <?php echo Funciones::formatearMoneda($total_pendiente_pagar); ?>
+                                        <?php echo Funciones::formatearMonedaBolivianos($total_pendiente_pagar); ?>
                                     </div>
                                     <div class="mt-2 mb-0 text-muted text-xs">
                                         <span class="text-danger me-2">
@@ -495,7 +495,7 @@ try {
                                         Cobrado
                                     </div>
                                     <div class="h5 mb-0 fw-bold">
-                                        <?php echo Funciones::formatearMoneda($total_pagado_cobrar); ?>
+                                        <?php echo Funciones::formatearMonedaBolivianos($total_pagado_cobrar); ?>
                                     </div>
                                     <div class="mt-2 mb-0 text-muted text-xs">
                                         <span class="text-info me-2">
@@ -521,7 +521,7 @@ try {
                                         Pagado
                                     </div>
                                     <div class="h5 mb-0 fw-bold">
-                                        <?php echo Funciones::formatearMoneda($total_pagado_pagar); ?>
+                                        <?php echo Funciones::formatearMonedaBolivianos($total_pagado_pagar); ?>
                                     </div>
                                     <div class="mt-2 mb-0 text-muted text-xs">
                                         <span class="text-warning me-2">
@@ -584,11 +584,11 @@ try {
                             <div class="row mt-3">
                                 <div class="col-6">
                                     <small class="text-muted d-block">Total Pendiente</small>
-                                    <h4 class="fw-bold text-success"><?php echo Funciones::formatearMoneda($total_pendiente_cobrar); ?></h4>
+                                    <h4 class="fw-bold text-success"><?php echo Funciones::formatearMonedaBolivianos($total_pendiente_cobrar); ?></h4>
                                 </div>
                                 <div class="col-6">
                                     <small class="text-muted d-block">Total Cobrado</small>
-                                    <h4 class="fw-bold text-info"><?php echo Funciones::formatearMoneda($total_pagado_cobrar); ?></h4>
+                                    <h4 class="fw-bold text-info"><?php echo Funciones::formatearMonedaBolivianos($total_pagado_cobrar); ?></h4>
                                 </div>
                             </div>
                         </div>
@@ -604,11 +604,11 @@ try {
                             <div class="row mt-3">
                                 <div class="col-6">
                                     <small class="text-muted d-block">Total Pendiente</small>
-                                    <h4 class="fw-bold text-danger"><?php echo Funciones::formatearMoneda($total_pendiente_pagar); ?></h4>
+                                    <h4 class="fw-bold text-danger"><?php echo Funciones::formatearMonedaBolivianos($total_pendiente_pagar); ?></h4>
                                 </div>
                                 <div class="col-6">
                                     <small class="text-muted d-block">Total Pagado</small>
-                                    <h4 class="fw-bold text-warning"><?php echo Funciones::formatearMoneda($total_pagado_pagar); ?></h4>
+                                    <h4 class="fw-bold text-warning"><?php echo Funciones::formatearMonedaBolivianos($total_pagado_pagar); ?></h4>
                                 </div>
                             </div>
                         </div>
@@ -700,10 +700,10 @@ try {
                                                 </span>
                                             </td>
                                             <td class="amount <?php echo $cuenta['tipo'] === 'pago' ? 'positive' : 'negative'; ?>">
-                                                <?php echo Funciones::formatearMoneda($cuenta['monto']); ?>
+                                                <?php echo Funciones::formatearMonedaBolivianos($cuenta['monto']); ?>
                                             </td>
-                                            <td><?php echo Funciones::formatearMoneda($cuenta['saldo_anterior']); ?></td>
-                                            <td><?php echo Funciones::formatearMoneda($cuenta['saldo_nuevo']); ?></td>
+                                            <td><?php echo Funciones::formatearMonedaBolivianos($cuenta['saldo_anterior']); ?></td>
+                                            <td><?php echo Funciones::formatearMonedaBolivianos($cuenta['saldo_nuevo']); ?></td>
                                             <td>
                                                 <?php if ($cuenta['codigo_venta']): ?>
                                                     <span class="badge bg-light text-dark">#<?php echo $cuenta['codigo_venta']; ?></span>
@@ -785,10 +785,10 @@ try {
                                                 </span>
                                             </td>
                                             <td class="amount <?php echo $cuenta['tipo'] === 'pago' ? 'negative' : 'positive'; ?>">
-                                                <?php echo Funciones::formatearMoneda($cuenta['monto']); ?>
+                                                <?php echo Funciones::formatearMonedaBolivianos($cuenta['monto']); ?>
                                             </td>
-                                            <td><?php echo Funciones::formatearMoneda($cuenta['saldo_anterior']); ?></td>
-                                            <td><?php echo Funciones::formatearMoneda($cuenta['saldo_nuevo']); ?></td>
+                                            <td><?php echo Funciones::formatearMonedaBolivianos($cuenta['saldo_anterior']); ?></td>
+                                            <td><?php echo Funciones::formatearMonedaBolivianos($cuenta['saldo_nuevo']); ?></td>
                                             <td>
                                                 <?php if ($cuenta['metodo_pago']): ?>
                                                     <?php
@@ -877,7 +877,7 @@ try {
                                                                 <?php echo $venta['dias_vencimiento']; ?> días
                                                             </td>
                                                             <td class="fw-bold text-danger">
-                                                                <?php echo Funciones::formatearMoneda($deuda_actual); ?>
+                                                                <?php echo Funciones::formatearMonedaBolivianos($deuda_actual); ?>
                                                             </td>
                                                             <td>
                                                                 <button class="btn btn-sm btn-success" 
@@ -915,7 +915,7 @@ try {
                                                 $alertas[] = [
                                                     'tipo' => 'urgente',
                                                     'mensaje' => "Venta #{$venta['codigo_venta']} vence en {$venta['dias_vencimiento']} días",
-                                                    'deuda' => Funciones::formatearMoneda($deuda_actual),
+                                                    'deuda' => Funciones::formatearMonedaBolivianos($deuda_actual),
                                                     'fecha' => $venta['fecha_vencimiento'],
                                                     'cliente_id' => $venta['cliente_id']
                                                 ];
@@ -924,7 +924,7 @@ try {
                                                 $alertas[] = [
                                                     'tipo' => 'advertencia',
                                                     'mensaje' => "Venta #{$venta['codigo_venta']} vence en {$venta['dias_vencimiento']} días",
-                                                    'deuda' => Funciones::formatearMoneda($deuda_actual),
+                                                    'deuda' => Funciones::formatearMonedaBolivianos($deuda_actual),
                                                     'fecha' => $venta['fecha_vencimiento'],
                                                     'cliente_id' => $venta['cliente_id']
                                                 ];
@@ -937,7 +937,7 @@ try {
                                                 $alertas[] = [
                                                     'tipo' => 'deuda',
                                                     'mensaje' => "{$deudor['nombre']} tiene deuda alta",
-                                                    'deuda' => Funciones::formatearMoneda($deudor['deuda_total']),
+                                                    'deuda' => Funciones::formatearMonedaBolivianos($deudor['deuda_total']),
                                                     'fecha' => date('Y-m-d'),
                                                     'cliente_id' => $deudor['id']
                                                 ];
@@ -1017,9 +1017,9 @@ try {
                                                                 <small class="text-muted"><?php echo $deudor['telefono']; ?></small>
                                                             </td>
                                                             <td class="fw-bold text-danger">
-                                                                <?php echo Funciones::formatearMoneda($deudor['deuda_total']); ?>
+                                                                <?php echo Funciones::formatearMonedaBolivianos($deudor['deuda_total']); ?>
                                                             </td>
-                                                            <td><?php echo Funciones::formatearMoneda($deudor['limite_credito']); ?></td>
+                                                            <td><?php echo Funciones::formatearMonedaBolivianos($deudor['limite_credito']); ?></td>
                                                             <td>
                                                                 <div class="progress" style="height: 20px;">
                                                                     <div class="progress-bar bg-<?php echo $porcentaje_class; ?>" 
@@ -1113,7 +1113,7 @@ try {
                                                 if ($deuda > 0): ?>
                                                 <option value="<?php echo $cliente['id']; ?>" data-deuda="<?php echo $deuda; ?>">
                                                     <?php echo htmlspecialchars($cliente['nombre']); ?>
-                                                    (Deuda: <?php echo Funciones::formatearMoneda($deuda); ?>)
+                                                    (Deuda: <?php echo Funciones::formatearMonedaBolivianos($deuda); ?>)
                                                 </option>
                                             <?php endif; endforeach; ?>
                                         </select>
@@ -1169,7 +1169,7 @@ try {
                                                 if ($deuda > 0): ?>
                                                 <option value="<?php echo $proveedor['id']; ?>" data-deuda="<?php echo $deuda; ?>">
                                                     <?php echo htmlspecialchars($proveedor['nombre']); ?>
-                                                    (Deuda: <?php echo Funciones::formatearMoneda($deuda); ?>)
+                                                    (Deuda: <?php echo Funciones::formatearMonedaBolivianos($deuda); ?>)
                                                 </option>
                                             <?php endif; endforeach; ?>
                                         </select>

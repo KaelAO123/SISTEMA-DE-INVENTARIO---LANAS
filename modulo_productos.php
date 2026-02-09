@@ -646,7 +646,7 @@ try {
                                         foreach ($subpaquetes as $subpaquete) {
                                             $valor_total += $subpaquete['precio_venta'] * $subpaquete['stock'];
                                         }
-                                        echo Funciones::formatearMoneda($valor_total);
+                                        echo Funciones::formatearMonedaBolivianos($valor_total);
                                         ?>
                                     </div>
                                 </div>
@@ -724,8 +724,8 @@ try {
                                                 <?php echo $paquete['cantidad_subpaquetes']; ?> / <?php echo $paquete['subpaquetes_por_paquete']; ?>
                                             </span>
                                         </td>
-                                        <td class="fw-bold"><?php echo Funciones::formatearMoneda($paquete['costo']); ?></td>
-                                        <td class="fw-bold text-success"><?php echo Funciones::formatearMoneda($paquete['precio_venta_sugerido']); ?></td>
+                                        <td class="fw-bold"><?php echo Funciones::formatearMonedaBolivianos($paquete['costo']); ?></td>
+                                        <td class="fw-bold text-success"><?php echo Funciones::formatearMonedaBolivianos($paquete['precio_venta_sugerido']); ?></td>
                                         <td><?php echo Funciones::formatearFecha($paquete['fecha_ingreso']); ?></td>
                                         <td class="table-actions">
                                             <button class="btn btn-sm btn-outline-success" 
@@ -794,7 +794,7 @@ try {
                                             <span class="badge bg-light text-dark"><?php echo $subpaquete['codigo_color']; ?></span>
                                         </td>
                                         <td><?php echo htmlspecialchars($subpaquete['paquete_nombre']); ?></td>
-                                        <td class="fw-bold text-success"><?php echo Funciones::formatearMoneda($subpaquete['precio_venta']); ?></td>
+                                        <td class="fw-bold text-success"><?php echo Funciones::formatearMonedaBolivianos($subpaquete['precio_venta']); ?></td>
                                         <td>
                                             <span class="stock-indicator <?php echo $stock_clase; ?>"></span>
                                             <span class="fw-bold <?php echo $subpaquete['stock'] <= $subpaquete['min_stock'] ? 'text-danger' : ''; ?>">

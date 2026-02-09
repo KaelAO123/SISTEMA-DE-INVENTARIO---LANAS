@@ -574,7 +574,7 @@ try {
                                             <div class="d-flex justify-content-between align-items-center mb-1">
                                                 <div class="fw-bold"><?php echo htmlspecialchars($actividad['nombre']); ?></div>
                                                 <span class="badge bg-success">
-                                                    <?php echo Funciones::formatearMoneda($actividad['total']); ?>
+                                                    <?php echo Funciones::formatearMonedaBolivianos($actividad['total']); ?>
                                                 </span>
                                             </div>
                                             <div class="d-flex justify-content-between">

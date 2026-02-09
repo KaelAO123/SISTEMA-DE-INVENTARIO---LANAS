@@ -31,8 +31,8 @@ class Funciones {
         return date($formato, $timestamp);
     }
     
-    public static function formatearMoneda($monto) {
-        return '$' . number_format($monto, 2, '.', ',');
+    public static function formatearMonedaBolivianos($monto) {
+        return 'Bs' . number_format($monto, 2, '.', ',');
     }
     
     public static function generarCodigo($prefijo = '') {

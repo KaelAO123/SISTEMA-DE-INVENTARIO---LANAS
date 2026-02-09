@@ -218,7 +218,7 @@ unset($_SESSION['venta_id']);
             <div class="item-row">
                 <div class="item-name"><?php echo htmlspecialchars($detalle['nombre_color']); ?></div>
                 <div class="item-qty"><?php echo $detalle['cantidad']; ?></div>
-                <div class="item-price"><?php echo Funciones::formatearMoneda($detalle['subtotal']); ?></div>
+                <div class="item-price"><?php echo Funciones::formatearMonedaBolivianos($detalle['subtotal']); ?></div>
             </div>
             <?php endforeach; ?>
         </div>
@@ -226,25 +226,25 @@ unset($_SESSION['venta_id']);
         <div class="totales">
             <div class="total-row">
                 <div>Subtotal:</div>
-                <div><?php echo Funciones::formatearMoneda($venta['subtotal']); ?></div>
+                <div><?php echo Funciones::formatearMonedaBolivianos($venta['subtotal']); ?></div>
             </div>
             <div class="total-row">
                 <div>Descuento:</div>
-                <div>-<?php echo Funciones::formatearMoneda($venta['descuento']); ?></div>
+                <div>-<?php echo Funciones::formatearMonedaBolivianos($venta['descuento']); ?></div>
             </div>
             <div class="total-row">
                 <div>IVA (12%):</div>
-                <div><?php echo Funciones::formatearMoneda($venta['iva']); ?></div>
+                <div><?php echo Funciones::formatearMonedaBolivianos($venta['iva']); ?></div>
             </div>
             <div class="total-row total-grande">
                 <div>TOTAL:</div>
-                <div><?php echo Funciones::formatearMoneda($venta['total']); ?></div>
+                <div><?php echo Funciones::formatearMonedaBolivianos($venta['total']); ?></div>
             </div>
             
             <?php if ($venta['tipo_pago'] === 'credito'): ?>
             <div class="total-row" style="color: #dc3545;">
                 <div>Saldo Pendiente:</div>
-                <div><?php echo Funciones::formatearMoneda($venta['debe']); ?></div>
+                <div><?php echo Funciones::formatearMonedaBolivianos($venta['debe']); ?></div>
             </div>
             <?php endif; ?>
         </div>

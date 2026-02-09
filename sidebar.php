@@ -6,27 +6,8 @@
                 <i class="fas fa-warehouse fa-2x text-success"></i>
             </div>
             <h5 class="mb-1 text-success">Inventario Lanas</h5>
-            <small class="text-muted">Sistema de Gestión</small>
         </div>
-        
-        <div class="px-3 py-3 border-bottom">
-            <div class="d-flex align-items-center">
-                <div class="flex-shrink-0">
-                    <div class="rounded-circle bg-success d-flex align-items-center justify-content-center" 
-                         style="width: 40px; height: 40px;">
-                        <i class="fas fa-user text-white"></i>
-                    </div>
-                </div>
-                <div class="flex-grow-1 ms-3">
-                    <h6 class="mb-0 text-success"><?php echo Funciones::obtenerNombreUsuario(); ?></h6>
-                    <small class="text-muted">
-                        <i class="fas fa-user-tag"></i> 
-                        <?php echo Funciones::obtenerRolUsuario() == 'admin' ? 'Administrador' : 'Vendedor'; ?>
-                    </small>
-                </div>
-            </div>
-        </div>
-        
+    
         <div class="sidebar-menu px-3 py-4">
             <ul class="nav flex-column">
                 <li class="nav-item mb-2">
@@ -103,13 +84,24 @@
             </ul>
         </div>
         
-        <div class="sidebar-footer px-3 py-3 border-top text-center">
-            <small class="text-muted">
-                <i class="fas fa-info-circle me-1"></i>
-                Sistema v1.0
-            </small>
-        </div>
     </div>
+            <div class="px-3 py-3 border-bottom">
+            <div class="d-flex align-items-center">
+                <div class="flex-shrink-0">
+                    <div class="rounded-circle bg-success d-flex align-items-center justify-content-center" 
+                         style="width: 40px; height: 40px;">
+                        <i class="fas fa-user text-white"></i>
+                    </div>
+                </div>
+                <div class="flex-grow-1 ms-3">
+                    <h6 class="mb-0 text-success"><?php echo Funciones::obtenerNombreUsuario(); ?></h6>
+                    <small class="text-muted">
+                        <i class="fas fa-user-tag"></i> 
+                        <?php echo Funciones::obtenerRolUsuario() == 'admin' ? 'Administrador' : 'Vendedor'; ?>
+                    </small>
+                </div>
+            </div>
+        </div>
 </nav>
 
 <script>

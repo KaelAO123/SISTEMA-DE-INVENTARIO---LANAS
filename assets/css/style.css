@@ -492,7 +492,7 @@ body {
     background-color: white;
     border-radius: 0.75rem;
     padding: 1.5rem;
-    height: calc(100vh - 120px);
+    height: 100%;
     overflow: hidden;
 }
 

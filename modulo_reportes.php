@@ -956,7 +956,7 @@ function exportarExcel($db, $tipo, $fecha_desde, $fecha_hasta, $vendedor, $clien
                         <div class="stat-card">
                             <div class="d-flex justify-content-between align-items-center">
                                 <div>
-                                    <div class="summary-value"><?php echo Funciones::formatearMoneda($estadisticas['total_ingresos']); ?></div>
+                                    <div class="summary-value"><?php echo Funciones::formatearMonedaBolivianos($estadisticas['total_ingresos']); ?></div>
                                     <div class="summary-label">Ingresos Totales</div>
                                 </div>
                                 <div class="text-primary">
@@ -972,7 +972,7 @@ function exportarExcel($db, $tipo, $fecha_desde, $fecha_hasta, $vendedor, $clien
                         <div class="stat-card">
                             <div class="d-flex justify-content-between align-items-center">
                                 <div>
-                                    <div class="summary-value"><?php echo Funciones::formatearMoneda($estadisticas['total_cobrado']); ?></div>
+                                    <div class="summary-value"><?php echo Funciones::formatearMonedaBolivianos($estadisticas['total_cobrado']); ?></div>
                                     <div class="summary-label">Total Cobrado</div>
                                 </div>
                                 <div class="text-info">
@@ -988,7 +988,7 @@ function exportarExcel($db, $tipo, $fecha_desde, $fecha_hasta, $vendedor, $clien
                         <div class="stat-card stat-card-danger">
                             <div class="d-flex justify-content-between align-items-center">
                                 <div>
-                                    <div class="summary-value"><?php echo Funciones::formatearMoneda($estadisticas['total_pendiente']); ?></div>
+                                    <div class="summary-value"><?php echo Funciones::formatearMonedaBolivianos($estadisticas['total_pendiente']); ?></div>
                                     <div class="summary-label">Por Cobrar</div>
                                 </div>
                                 <div class="text-danger">
@@ -1020,7 +1020,7 @@ function exportarExcel($db, $tipo, $fecha_desde, $fecha_hasta, $vendedor, $clien
                         <div class="stat-card stat-card-warning">
                             <div class="d-flex justify-content-between align-items-center">
                                 <div>
-                                    <div class="summary-value"><?php echo Funciones::formatearMoneda($estadisticas['promedio_venta']); ?></div>
+                                    <div class="summary-value"><?php echo Funciones::formatearMonedaBolivianos($estadisticas['promedio_venta']); ?></div>
                                     <div class="summary-label">Promedio por Venta</div>
                                 </div>
                                 <div class="text-warning">
@@ -1143,7 +1143,7 @@ function exportarExcel($db, $tipo, $fecha_desde, $fecha_hasta, $vendedor, $clien
                                                         </div>
                                                     </div>
                                                     <div class="fw-bold text-success">
-                                                        <?php echo Funciones::formatearMoneda($producto['total_vendido']); ?>
+                                                        <?php echo Funciones::formatearMonedaBolivianos($producto['total_vendido']); ?>
                                                     </div>
                                                 </div>
                                             <?php endforeach; ?>
@@ -1215,17 +1215,17 @@ function exportarExcel($db, $tipo, $fecha_desde, $fecha_hasta, $vendedor, $clien
                                                         <small class="text-muted d-block">Pagadas: <?php echo $fila['ventas_pagadas']; ?></small>
                                                     </td>
                                                     <td><?php echo $fila['clientes_unicos']; ?></td>
-                                                    <td class="text-success fw-bold"><?php echo Funciones::formatearMoneda($fila['total_ventas']); ?></td>
+                                                    <td class="text-success fw-bold"><?php echo Funciones::formatearMonedaBolivianos($fila['total_ventas']); ?></td>
                                                     <td>
                                                         <div class="d-flex align-items-center">
                                                             <div class="progress flex-grow-1 me-2" style="height: 5px;">
                                                                 <div class="progress-bar bg-success" style="width: <?php echo $porcentaje_pagado; ?>%"></div>
                                                             </div>
-                                                            <?php echo Funciones::formatearMoneda($fila['total_pagado']); ?>
+                                                            <?php echo Funciones::formatearMonedaBolivianos($fila['total_pagado']); ?>
                                                         </div>
                                                     </td>
-                                                    <td class="text-danger fw-bold"><?php echo Funciones::formatearMoneda($fila['total_debe']); ?></td>
-                                                    <td><?php echo Funciones::formatearMoneda($fila['promedio_venta']); ?></td>
+                                                    <td class="text-danger fw-bold"><?php echo Funciones::formatearMonedaBolivianos($fila['total_debe']); ?></td>
+                                                    <td><?php echo Funciones::formatearMonedaBolivianos($fila['promedio_venta']); ?></td>
                                                     <td>
                                                         <span class="badge bg-<?php echo $estado_color; ?>">
                                                             <?php echo number_format($porcentaje_pagado, 1); ?>% cobrado
@@ -1307,7 +1307,7 @@ function exportarExcel($db, $tipo, $fecha_desde, $fecha_hasta, $vendedor, $clien
                                                                 <small class="text-muted"><?php echo $producto['codigo_color']; ?></small>
                                                             </td>
                                                             <td class="fw-bold"><?php echo $producto['unidades_vendidas']; ?></td>
-                                                            <td class="text-success fw-bold"><?php echo Funciones::formatearMoneda($producto['total_vendido']); ?></td>
+                                                            <td class="text-success fw-bold"><?php echo Funciones::formatearMonedaBolivianos($producto['total_vendido']); ?></td>
                                                             <td>
                                                                 <?php if ($producto['total_vendido'] > 0): ?>
                                                                     <div class="progress" style="height: 20px;">
@@ -1380,7 +1380,7 @@ function exportarExcel($db, $tipo, $fecha_desde, $fecha_hasta, $vendedor, $clien
                                                         </div>
                                                     </div>
                                                     <div class="fw-bold text-success">
-                                                        <?php echo Funciones::formatearMoneda($cliente['total_comprado']); ?>
+                                                        <?php echo Funciones::formatearMonedaBolivianos($cliente['total_comprado']); ?>
                                                     </div>
                                                 </div>
                                             <?php endforeach; ?>
@@ -1438,8 +1438,8 @@ function exportarExcel($db, $tipo, $fecha_desde, $fecha_hasta, $vendedor, $clien
                                                     <td>
                                                         <span class="badge bg-primary"><?php echo $cliente['compras_realizadas']; ?></span>
                                                     </td>
-                                                    <td class="text-success fw-bold"><?php echo Funciones::formatearMoneda($cliente['total_comprado']); ?></td>
-                                                    <td><?php echo Funciones::formatearMoneda($cliente['promedio_compra']); ?></td>
+                                                    <td class="text-success fw-bold"><?php echo Funciones::formatearMonedaBolivianos($cliente['total_comprado']); ?></td>
+                                                    <td><?php echo Funciones::formatearMonedaBolivianos($cliente['promedio_compra']); ?></td>
                                                     <td>
                                                         <?php if ($cliente['ultima_compra']): ?>
                                                             <?php echo Funciones::formatearFecha($cliente['ultima_compra'], 'd/m/Y'); ?>
@@ -1447,9 +1447,9 @@ function exportarExcel($db, $tipo, $fecha_desde, $fecha_hasta, $vendedor, $clien
                                                             <span class="text-muted">Nunca</span>
                                                         <?php endif; ?>
                                                     </td>
-                                                    <td><?php echo Funciones::formatearMoneda($cliente['limite_credito']); ?></td>
+                                                    <td><?php echo Funciones::formatearMonedaBolivianos($cliente['limite_credito']); ?></td>
                                                     <td class="<?php echo $cliente['saldo_deuda'] > 0 ? 'text-danger fw-bold' : 'text-success'; ?>">
-                                                        <?php echo Funciones::formatearMoneda($cliente['saldo_deuda']); ?>
+                                                        <?php echo Funciones::formatearMonedaBolivianos($cliente['saldo_deuda']); ?>
                                                     </td>
                                                     <td>
                                                         <div class="progress" style="height: 20px;">
@@ -1535,7 +1535,7 @@ function exportarExcel($db, $tipo, $fecha_desde, $fecha_hasta, $vendedor, $clien
                                                                     <?php echo number_format($ratio, 2); ?>
                                                                 </span>
                                                             </td>
-                                                            <td class="text-success fw-bold"><?php echo Funciones::formatearMoneda($producto['valor_stock']); ?></td>
+                                                            <td class="text-success fw-bold"><?php echo Funciones::formatearMonedaBolivianos($producto['valor_stock']); ?></td>
                                                             <td>
                                                                 <div class="progress progress-inventory">
                                                                     <div class="progress-bar <?php echo $estado_class; ?>" 
@@ -1609,8 +1609,8 @@ function exportarExcel($db, $tipo, $fecha_desde, $fecha_hasta, $vendedor, $clien
                                                     <td class="fw-bold text-<?php echo $estado_class; ?>"><?php echo $producto['stock']; ?></td>
                                                     <td><?php echo $producto['min_stock']; ?></td>
                                                     <td><?php echo $producto['max_stock']; ?></td>
-                                                    <td><?php echo Funciones::formatearMoneda($producto['precio_venta']); ?></td>
-                                                    <td class="text-success fw-bold"><?php echo Funciones::formatearMoneda($producto['valor_inventario']); ?></td>
+                                                    <td><?php echo Funciones::formatearMonedaBolivianos($producto['precio_venta']); ?></td>
+                                                    <td class="text-success fw-bold"><?php echo Funciones::formatearMonedaBolivianos($producto['valor_inventario']); ?></td>
                                                     <td><?php echo $producto['vendido_total']; ?></td>
                                                     <td>
                                                         <?php if ($producto['fecha_ultima_venta']): ?>
@@ -1689,21 +1689,21 @@ function exportarExcel($db, $tipo, $fecha_desde, $fecha_hasta, $vendedor, $clien
                                     }
                                     ?>
                                     <div class="summary-item">
-                                        <div class="summary-value"><?php echo Funciones::formatearMoneda($total_pendiente); ?></div>
+                                        <div class="summary-value"><?php echo Funciones::formatearMonedaBolivianos($total_pendiente); ?></div>
                                         <div class="summary-label">Total Pendiente</div>
                                     </div>
                                     <div class="mt-3">
                                         <div class="d-flex justify-content-between mb-2">
                                             <span class="text-danger">Vencido (>30 días)</span>
-                                            <span class="fw-bold"><?php echo Funciones::formatearMoneda($vencido_30); ?></span>
+                                            <span class="fw-bold"><?php echo Funciones::formatearMonedaBolivianos($vencido_30); ?></span>
                                         </div>
                                         <div class="d-flex justify-content-between mb-2">
                                             <span class="text-warning">Por Vencer (15-30 días)</span>
-                                            <span class="fw-bold"><?php echo Funciones::formatearMoneda($vencido_15); ?></span>
+                                            <span class="fw-bold"><?php echo Funciones::formatearMonedaBolivianos($vencido_15); ?></span>
                                         </div>
                                         <div class="d-flex justify-content-between mb-2">
                                             <span class="text-success">Al Día</span>
-                                            <span class="fw-bold"><?php echo Funciones::formatearMoneda($al_dia); ?></span>
+                                            <span class="fw-bold"><?php echo Funciones::formatearMonedaBolivianos($al_dia); ?></span>
                                         </div>
                                     </div>
                                 </div>
@@ -1757,9 +1757,9 @@ function exportarExcel($db, $tipo, $fecha_desde, $fecha_hasta, $vendedor, $clien
                                                     <td>
                                                         <span class="badge bg-info"><?php echo $cobranza['codigo_venta'] ?? 'N/A'; ?></span>
                                                     </td>
-                                                    <td><?php echo Funciones::formatearMoneda($cobranza['monto_total']); ?></td>
-                                                    <td class="text-success"><?php echo Funciones::formatearMoneda($cobranza['monto_pagado']); ?></td>
-                                                    <td class="text-danger fw-bold"><?php echo Funciones::formatearMoneda($cobranza['monto_pendiente']); ?></td>
+                                                    <td><?php echo Funciones::formatearMonedaBolivianos($cobranza['monto_total']); ?></td>
+                                                    <td class="text-success"><?php echo Funciones::formatearMonedaBolivianos($cobranza['monto_pagado']); ?></td>
+                                                    <td class="text-danger fw-bold"><?php echo Funciones::formatearMonedaBolivianos($cobranza['monto_pendiente']); ?></td>
                                                     <td><?php echo Funciones::formatearFecha($cobranza['fecha_venta'], 'd/m/Y'); ?></td>
                                                     <td>
                                                         <?php if ($cobranza['fecha_vencimiento']): ?>
@@ -1836,7 +1836,7 @@ function exportarExcel($db, $tipo, $fecha_desde, $fecha_hasta, $vendedor, $clien
                                                         </div>
                                                     </div>
                                                     <div class="fw-bold text-success">
-                                                        <?php echo Funciones::formatearMoneda($proveedor['valor_inventario']); ?>
+                                                        <?php echo Funciones::formatearMonedaBolivianos($proveedor['valor_inventario']); ?>
                                                     </div>
                                                 </div>
                                             <?php endforeach; ?>
@@ -1897,9 +1897,9 @@ function exportarExcel($db, $tipo, $fecha_desde, $fecha_hasta, $vendedor, $clien
                                                     </td>
                                                     <td><?php echo $proveedor['variantes']; ?></td>
                                                     <td><?php echo $proveedor['stock_total']; ?></td>
-                                                    <td class="text-success fw-bold"><?php echo Funciones::formatearMoneda($proveedor['valor_inventario']); ?></td>
+                                                    <td class="text-success fw-bold"><?php echo Funciones::formatearMonedaBolivianos($proveedor['valor_inventario']); ?></td>
                                                     <td class="text-<?php echo $deuda_color; ?> fw-bold">
-                                                        <?php echo Funciones::formatearMoneda($proveedor['saldo_deuda']); ?>
+                                                        <?php echo Funciones::formatearMonedaBolivianos($proveedor['saldo_deuda']); ?>
                                                     </td>
                                                     <td>
                                                         <?php if ($proveedor['compras_pendientes'] > 0): ?>

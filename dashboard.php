@@ -164,7 +164,7 @@ try {
                                         Ventas Hoy
                                     </div>
                                     <div class="h5 mb-0 fw-bold text-gray-800">
-                                        <?php echo Funciones::formatearMoneda($estadisticas['ventas_hoy']['monto'] ?? 0); ?>
+                                        <?php echo Funciones::formatearMonedaBolivianos($estadisticas['ventas_hoy']['monto'] ?? 0); ?>
                                     </div>
                                     <div class="mt-2 mb-0 text-muted text-xs">
                                         <span class="text-success me-2">
@@ -216,7 +216,7 @@ try {
                                         Deuda Clientes
                                     </div>
                                     <div class="h5 mb-0 fw-bold text-gray-800">
-                                        <?php echo Funciones::formatearMoneda($estadisticas['clientes_deuda']['monto'] ?? 0); ?>
+                                        <?php echo Funciones::formatearMonedaBolivianos($estadisticas['clientes_deuda']['monto'] ?? 0); ?>
                                     </div>
                                     <div class="mt-2 mb-0 text-muted text-xs">
                                         <span class="text-danger me-2">
@@ -242,7 +242,7 @@ try {
                                         Ventas Mes
                                     </div>
                                     <div class="h5 mb-0 fw-bold text-gray-800">
-                                        <?php echo Funciones::formatearMoneda($estadisticas['ventas_mes'] ?? 0); ?>
+                                        <?php echo Funciones::formatearMonedaBolivianos($estadisticas['ventas_mes'] ?? 0); ?>
                                     </div>
                                     <div class="mt-2 mb-0 text-muted text-xs">
                                         <span class="text-info me-2">
@@ -472,7 +472,7 @@ try {
                                                     </td>
                                                     <td><?php echo htmlspecialchars($venta['cliente_nombre'] ?? 'Consumidor Final'); ?></td>
                                                     <td><?php echo Funciones::formatearFecha($venta['fecha_hora'], 'd/m/Y H:i'); ?></td>
-                                                    <td class="fw-bold"><?php echo Funciones::formatearMoneda($venta['total']); ?></td>
+                                                    <td class="fw-bold"><?php echo Funciones::formatearMonedaBolivianos($venta['total']); ?></td>
                                                     <td>
                                                         <span class="badge bg-<?php echo $venta['tipo_pago'] == 'contado' ? 'success' : ($venta['tipo_pago'] == 'credito' ? 'warning' : 'info'); ?>">
                                                             <?php echo ucfirst($venta['tipo_pago']); ?>
