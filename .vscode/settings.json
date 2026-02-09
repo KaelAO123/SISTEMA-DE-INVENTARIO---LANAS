@@ -1,0 +1,30 @@
+{
+    "sqltools.connections": [
+        {
+            "ssh": "Disabled",
+            "previewLimit": 50,
+            "server": "localhost",
+            "port": 5432,
+            "askForPassword": true,
+            "driver": "PostgreSQL",
+            "name": "examen-dylan",
+            "database": "mi-base-datos",
+            "username": "mi-usuario"
+        },
+        {
+            "mysqlOptions": {
+                "authProtocol": "default",
+                "enableSsl": "Disabled"
+            },
+            "ssh": "Disabled",
+            "previewLimit": 50,
+            "server": "localhost",
+            "port": 3306,
+            "driver": "MySQL",
+            "name": "inventario_lanas",
+            "database": "inventario_lanas",
+            "username": "root",
+            "askForPassword": true
+        }
+    ]
+}

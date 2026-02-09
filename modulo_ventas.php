@@ -703,7 +703,7 @@ Funciones::mostrarAlertaSesion();
         /* Métodos de pago */
         .payment-methods {
             display: grid;
-            grid-template-columns: repeat(3, 1fr);
+            grid-template-columns: repeat(2, 1fr);
             gap: 12px;
             margin: 20px 0;
         }
@@ -1194,10 +1194,6 @@ Funciones::mostrarAlertaSesion();
                                 <div class="payment-option" data-payment="credito" onclick="seleccionarPago('credito')">
                                     <i class="fas fa-credit-card"></i>
                                     <div>Crédito</div>
-                                </div>
-                                <div class="payment-option" data-payment="mixto" onclick="seleccionarPago('mixto')">
-                                    <i class="fas fa-percentage"></i>
-                                    <div>Mixto</div>
                                 </div>
                             </div>
                         </div>

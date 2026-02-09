@@ -118,7 +118,7 @@ try {
         v.debe as pagado_total
         FROM ventas v
         JOIN clientes c ON v.cliente_id = c.id
-        WHERE v.tipo_pago IN ('credito', 'mixto')
+        WHERE v.tipo_pago IN ('credito')
         AND v.debe > 0
         AND v.anulado = FALSE
         AND v.fecha_vencimiento IS NOT NULL

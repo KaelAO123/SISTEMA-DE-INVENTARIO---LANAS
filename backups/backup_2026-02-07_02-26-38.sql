@@ -484,7 +484,7 @@ CREATE TABLE `ventas` (
   `total` decimal(10,2) NOT NULL,
   `pagado` decimal(10,2) DEFAULT 0.00,
   `debe` decimal(10,2) DEFAULT 0.00,
-  `tipo_pago` enum('contado','credito','mixto') NOT NULL,
+  `tipo_pago` enum('contado','credito') NOT NULL,
   `estado` enum('pendiente','pagada','cancelada') DEFAULT 'pendiente',
   `fecha_hora` datetime NOT NULL,
   `fecha_vencimiento` date DEFAULT NULL,

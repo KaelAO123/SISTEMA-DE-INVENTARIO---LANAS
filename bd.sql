@@ -138,7 +138,7 @@ CREATE TABLE ventas (
     total DECIMAL(10,2) NOT NULL,
     pagado DECIMAL(10,2) DEFAULT 0.00,
     debe DECIMAL(10,2) DEFAULT 0.00,
-    tipo_pago ENUM('contado', 'credito', 'mixto') NOT NULL,
+    tipo_pago ENUM('contado', 'credito') NOT NULL,
     estado ENUM('pendiente', 'pagada', 'cancelada') DEFAULT 'pendiente',
     fecha_hora DATETIME NOT NULL,
     fecha_vencimiento DATE,

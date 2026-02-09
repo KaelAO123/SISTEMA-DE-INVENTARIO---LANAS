@@ -1,9 +1,9 @@
 <?php
 class Database {
-    private $host = "localhost";
+    private $host = "127.0.0.1";
     private $db_name = "inventario_lanas";
     private $username = "root";
-    private $password = "";
+    private $password = "password123";
     private $conn;
     
     public function getConnection() {
@@ -18,7 +18,7 @@ class Database {
             $this->conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
             $this->conn->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
         } catch(PDOException $e) {
-            error_log("Error de conexión: " . $e->getMessage());
+            error_log("Error de conexión: " . $e->getMessage(). "ALV");
             die("Error al conectar con la base de datos. Contacte al administrador.");
         }
         
