@@ -14,7 +14,7 @@ $error = '';
 // Si hay acción GET para cargar datos (para AJAX)
 if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['action'])) {
     $action = $_GET['action'];
-    
+
     try {
         switch ($action) {
             case 'obtener_paquete':
@@ -22,7 +22,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['action'])) {
                 $stmt = $db->prepare("SELECT * FROM paquetes WHERE id = ?");
                 $stmt->execute([$id]);
                 $paquete = $stmt->fetch(PDO::FETCH_ASSOC);
-                
+
                 if ($paquete) {
                     header('Content-Type: application/json');
                     echo json_encode(['success' => true, 'data' => $paquete]);
@@ -31,46 +31,76 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['action'])) {
                     echo json_encode(['success' => false, 'error' => 'Paquete no encontrado']);
                 }
                 exit();
-                
+
             case 'obtener_paquete_completo':
                 $id = $_GET['id'] ?? 0;
-                
+
                 // Obtener información del paquete
                 $stmt = $db->prepare("SELECT p.*, 
-                                             prov.nombre as proveedor_nombre, 
-                                             cat.nombre as categoria_nombre
-                                      FROM paquetes p
-                                      JOIN proveedores prov ON p.proveedor_id = prov.id
-                                      JOIN categorias cat ON p.categoria_id = cat.id
-                                      WHERE p.id = ?");
+                                 prov.nombre as proveedor_nombre, 
+                                 cat.nombre as categoria_nombre
+                          FROM paquetes p
+                          JOIN proveedores prov ON p.proveedor_id = prov.id
+                          JOIN categorias cat ON p.categoria_id = cat.id
+                          WHERE p.id = ?");
                 $stmt->execute([$id]);
                 $paquete = $stmt->fetch(PDO::FETCH_ASSOC);
-                
+
                 if (!$paquete) {
                     header('Content-Type: application/json');
                     echo json_encode(['success' => false, 'error' => 'Paquete no encontrado']);
                     exit();
                 }
-                
+
                 // Obtener subpaquetes del paquete
                 $stmt = $db->prepare("SELECT * FROM subpaquetes WHERE paquete_id = ? ORDER BY nombre_color");
                 $stmt->execute([$id]);
                 $subpaquetes = $stmt->fetchAll(PDO::FETCH_ASSOC);
-                
+
+                // CALCULAR INVENTARIO POR PAQUETES (NUEVO)
+                // Sumar el stock total de todos los subpaquetes
+                $stock_total_subpaquetes = 0;
+                foreach ($subpaquetes as $subpaquete) {
+                    $stock_total_subpaquetes += $subpaquete['stock'];
+                }
+
+                // Calcular cuántos paquetes completos hay
+                $subpaquetes_por_paquete = $paquete['subpaquetes_por_paquete'];
+                $paquetes_completos = floor($stock_total_subpaquetes / $subpaquetes_por_paquete);
+                $subpaquetes_sueltos = $stock_total_subpaquetes % $subpaquetes_por_paquete;
+
+                // Calcular la capacidad total (si todo estuviera en paquetes completos)
+                $capacidad_total_paquetes = $paquetes['cantidad_subpaquetes'] * $subpaquetes_por_paquete;
+                $porcentaje_ocupacion = $capacidad_total_paquetes > 0 ?
+                    ($stock_total_subpaquetes / $capacidad_total_paquetes) * 100 : 0;
+
+                // Preparar datos del inventario
+                $inventario_paquetes = [
+                    'subpaquetes_por_paquete' => $subpaquetes_por_paquete,
+                    'stock_total_subpaquetes' => $stock_total_subpaquetes,
+                    'paquetes_completos' => $paquetes_completos,
+                    'subpaquetes_sueltos' => $subpaquetes_sueltos,
+                    'cantidad_subpaquetes' => $paquete['cantidad_subpaquetes'],
+                    'capacidad_total' => $capacidad_total_paquetes,
+                    'porcentaje_ocupacion' => round($porcentaje_ocupacion, 1),
+                    'subpaquetes_faltantes' => $capacidad_total_paquetes - $stock_total_subpaquetes
+                ];
+
                 header('Content-Type: application/json');
                 echo json_encode([
                     'success' => true,
                     'paquete' => $paquete,
-                    'subpaquetes' => $subpaquetes
+                    'subpaquetes' => $subpaquetes,
+                    'inventario' => $inventario_paquetes  // NUEVO
                 ]);
                 exit();
-                
+
             case 'obtener_subpaquete':
                 $id = $_GET['id'] ?? 0;
                 $stmt = $db->prepare("SELECT * FROM subpaquetes WHERE id = ?");
                 $stmt->execute([$id]);
                 $subpaquete = $stmt->fetch(PDO::FETCH_ASSOC);
-                
+
                 if ($subpaquete) {
                     header('Content-Type: application/json');
                     echo json_encode(['success' => true, 'data' => $subpaquete]);
@@ -90,7 +120,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['action'])) {
 // Procesar acciones CRUD POST
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
-    
+
     try {
         switch ($action) {
             case 'agregar_paquete':
@@ -104,28 +134,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $precio_venta_sugerido = $_POST['precio_venta_sugerido'];
                 $fecha_ingreso = $_POST['fecha_ingreso'];
                 $ubicacion = Funciones::sanitizar($_POST['ubicacion']);
-                
+
                 // Verificar código único
                 $stmt = $db->prepare("SELECT id FROM paquetes WHERE codigo = ?");
                 $stmt->execute([$codigo]);
                 if ($stmt->fetch()) {
                     throw new Exception("El código ya existe");
                 }
-                
+
                 $stmt = $db->prepare("INSERT INTO paquetes 
                                     (codigo, proveedor_id, categoria_id, nombre, descripcion,
                                      subpaquetes_por_paquete, costo, precio_venta_sugerido,
                                      fecha_ingreso, ubicacion)
                                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
                 $stmt->execute([
-                    $codigo, $proveedor_id, $categoria_id, $nombre, $descripcion,
-                    $subpaquetes_por_paquete, $costo, $precio_venta_sugerido,
-                    $fecha_ingreso, $ubicacion
+                    $codigo,
+                    $proveedor_id,
+                    $categoria_id,
+                    $nombre,
+                    $descripcion,
+                    $subpaquetes_por_paquete,
+                    $costo,
+                    $precio_venta_sugerido,
+                    $fecha_ingreso,
+                    $ubicacion
                 ]);
-                
+
                 $mensaje = "Paquete agregado exitosamente";
                 break;
-                
+
             case 'editar_paquete':
                 $id = $_POST['id'];
                 $nombre = Funciones::sanitizar($_POST['nombre']);
@@ -133,50 +170,53 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $costo = $_POST['costo'];
                 $precio_venta_sugerido = $_POST['precio_venta_sugerido'];
                 $ubicacion = Funciones::sanitizar($_POST['ubicacion']);
-                
+
                 $stmt = $db->prepare("UPDATE paquetes 
                                     SET nombre = ?, descripcion = ?, costo = ?,
                                         precio_venta_sugerido = ?, ubicacion = ?
                                     WHERE id = ?");
                 $stmt->execute([
-                    $nombre, $descripcion, $costo,
-                    $precio_venta_sugerido, $ubicacion, $id
+                    $nombre,
+                    $descripcion,
+                    $costo,
+                    $precio_venta_sugerido,
+                    $ubicacion,
+                    $id
                 ]);
-                
+
                 $mensaje = "Paquete actualizado exitosamente";
                 break;
-                
+
             case 'eliminar_paquete':
                 $id = $_POST['id'];
-                
+
                 // Verificar si tiene subpaquetes con stock
                 $stmt = $db->prepare("SELECT COUNT(*) as total FROM subpaquetes WHERE paquete_id = ? AND stock > 0");
                 $stmt->execute([$id]);
                 $result = $stmt->fetch();
-                
+
                 if ($result['total'] > 0) {
                     header('Content-Type: application/json');
                     echo json_encode(['success' => false, 'message' => "No se puede eliminar el paquete porque tiene productos con stock"]);
                     exit();
                 }
-                
+
                 $db->beginTransaction();
-                
+
                 try {
                     // Primero eliminar todos los subpaquetes (deben estar sin stock)
                     $stmt = $db->prepare("DELETE FROM subpaquetes WHERE paquete_id = ?");
                     $stmt->execute([$id]);
-                    
+
                     // Luego eliminar el paquete
                     $stmt = $db->prepare("DELETE FROM paquetes WHERE id = ?");
                     $stmt->execute([$id]);
-                    
+
                     $db->commit();
-                    
+
                     header('Content-Type: application/json');
                     echo json_encode(['success' => true, 'message' => "Paquete eliminado exitosamente"]);
                     exit();
-                    
                 } catch (Exception $e) {
                     $db->rollBack();
                     header('Content-Type: application/json');
@@ -184,7 +224,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     exit();
                 }
                 break;
-                
+
             case 'agregar_subpaquete':
                 $paquete_id = $_POST['paquete_id'];
                 $codigo_color = Funciones::sanitizar($_POST['codigo_color']);
@@ -194,36 +234,42 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $min_stock = $_POST['min_stock'];
                 $max_stock = $_POST['max_stock'];
                 $ubicacion = Funciones::sanitizar($_POST['ubicacion']);
-                
+
                 // Verificar código único en el paquete
                 $stmt = $db->prepare("SELECT id FROM subpaquetes WHERE paquete_id = ? AND codigo_color = ?");
                 $stmt->execute([$paquete_id, $codigo_color]);
                 if ($stmt->fetch()) {
                     throw new Exception("El código de color ya existe en este paquete");
                 }
-                
+
                 $db->beginTransaction();
-                
+
                 try {
                     // Insertar subpaquete
                     $stmt = $db->prepare("INSERT INTO subpaquetes 
                                         (paquete_id, codigo_color, nombre_color, precio_venta,
                                          stock, min_stock, max_stock, ubicacion)
                                         VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
-                    
+
                     $stmt->execute([
-                        $paquete_id, $codigo_color, $nombre_color, $precio_venta,
-                        $stock, $min_stock, $max_stock, $ubicacion
+                        $paquete_id,
+                        $codigo_color,
+                        $nombre_color,
+                        $precio_venta,
+                        $stock,
+                        $min_stock,
+                        $max_stock,
+                        $ubicacion
                     ]);
-                    
+
                     $subpaquete_id = $db->lastInsertId();
-                    
+
                     // Actualizar contadores del paquete
                     $stmt = $db->prepare("UPDATE paquetes 
                                         SET cantidad_subpaquetes = COALESCE(cantidad_subpaquetes, 0) + 1
                                         WHERE id = ?");
                     $stmt->execute([$paquete_id]);
-                    
+
                     // Registrar movimiento de stock SOLO SI HAY STOCK
                     if ($stock > 0) {
                         $stmt = $db->prepare("INSERT INTO movimientos_stock 
@@ -231,23 +277,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                              usuario_id, fecha_hora, observaciones)
                                             VALUES (?, 'ingreso', ?, 0, ?, ?, NOW(), ?)");
                         $stmt->execute([
-                            $subpaquete_id, 
-                            $stock, 
+                            $subpaquete_id,
+                            $stock,
                             $stock,
                             $_SESSION['usuario_id'],
                             'Ingreso inicial'
                         ]);
                     }
-                    
+
                     $db->commit();
                     $mensaje = "Subpaquete agregado exitosamente";
-                    
                 } catch (Exception $e) {
                     $db->rollBack();
                     throw $e;
                 }
                 break;
-                
+
             case 'editar_subpaquete':
                 $id = $_POST['id'];
                 $nombre_color = Funciones::sanitizar($_POST['nombre_color']);
@@ -255,58 +300,61 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $min_stock = $_POST['min_stock'];
                 $max_stock = $_POST['max_stock'];
                 $ubicacion = Funciones::sanitizar($_POST['ubicacion']);
-                
+
                 $stmt = $db->prepare("UPDATE subpaquetes 
                                     SET nombre_color = ?, precio_venta = ?,
                                         min_stock = ?, max_stock = ?, ubicacion = ?
                                     WHERE id = ?");
                 $stmt->execute([
-                    $nombre_color, $precio_venta,
-                    $min_stock, $max_stock, $ubicacion, $id
+                    $nombre_color,
+                    $precio_venta,
+                    $min_stock,
+                    $max_stock,
+                    $ubicacion,
+                    $id
                 ]);
-                
+
                 $mensaje = "Subpaquete actualizado exitosamente";
                 break;
-                
+
             case 'eliminar_subpaquete':
                 $id = $_POST['id'];
-                
+
                 // Verificar si tiene stock
                 $stmt = $db->prepare("SELECT stock, paquete_id FROM subpaquetes WHERE id = ?");
                 $stmt->execute([$id]);
                 $subpaquete = $stmt->fetch();
-                
+
                 if (!$subpaquete) {
                     header('Content-Type: application/json');
                     echo json_encode(['success' => false, 'message' => "Subpaquete no encontrado"]);
                     exit();
                 }
-                
+
                 if ($subpaquete['stock'] > 0) {
                     header('Content-Type: application/json');
                     echo json_encode(['success' => false, 'message' => "No se puede eliminar porque tiene stock disponible"]);
                     exit();
                 }
-                
+
                 $db->beginTransaction();
-                
+
                 try {
                     // Eliminar subpaquete
                     $stmt = $db->prepare("DELETE FROM subpaquetes WHERE id = ?");
                     $stmt->execute([$id]);
-                    
+
                     // Actualizar contadores del paquete
                     $stmt = $db->prepare("UPDATE paquetes 
                                         SET cantidad_subpaquetes = cantidad_subpaquetes - 1 
                                         WHERE id = ?");
                     $stmt->execute([$subpaquete['paquete_id']]);
-                    
+
                     $db->commit();
-                    
+
                     header('Content-Type: application/json');
                     echo json_encode(['success' => true, 'message' => "Subpaquete eliminado exitosamente"]);
                     exit();
-                    
                 } catch (Exception $e) {
                     $db->rollBack();
                     header('Content-Type: application/json');
@@ -318,55 +366,54 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $id = $_POST['id'];
                 $nuevo_stock = $_POST['stock'];
                 $observaciones = Funciones::sanitizar($_POST['observaciones']);
-                
+
                 // Obtener stock actual y verificar que el subpaquete existe
                 $stmt = $db->prepare("SELECT stock FROM subpaquetes WHERE id = ?");
                 $stmt->execute([$id]);
                 $resultado = $stmt->fetch();
-                
+
                 if (!$resultado) {
                     header('Content-Type: application/json');
                     echo json_encode(['success' => false, 'message' => "Subpaquete no encontrado"]);
                     exit();
                 }
-                
+
                 $stock_actual = $resultado['stock'];
                 $diferencia = $nuevo_stock - $stock_actual;
-                
+
                 $db->beginTransaction();
-                
+
                 try {
                     // Actualizar stock
                     $stmt = $db->prepare("UPDATE subpaquetes SET stock = ? WHERE id = ?");
                     $stmt->execute([$nuevo_stock, $id]);
-                    
+
                     // Registrar movimiento
                     $stmt = $db->prepare("INSERT INTO movimientos_stock 
                                         (subpaquete_id, tipo, cantidad, stock_anterior, stock_nuevo,
                                         usuario_id, fecha_hora, observaciones)
                                         VALUES (?, 'ajuste', ?, ?, ?, ?, NOW(), ?)");
                     $stmt->execute([
-                        $id, 
-                        $diferencia, 
-                        $stock_actual, 
+                        $id,
+                        $diferencia,
+                        $stock_actual,
                         $nuevo_stock,
-                        $_SESSION['usuario_id'], 
+                        $_SESSION['usuario_id'],
                         $observaciones
                     ]);
-                    
+
                     $db->commit();
-                    
+
                     header('Content-Type: application/json');
                     echo json_encode(['success' => true, 'message' => "Stock ajustado exitosamente"]);
                     exit();
-                    
                 } catch (Exception $e) {
                     $db->rollBack();
                     header('Content-Type: application/json');
                     echo json_encode(['success' => false, 'message' => "Error al ajustar stock: " . $e->getMessage()]);
                     exit();
                 }
-                break;    
+                break;
         }
     } catch (Exception $e) {
         $error = $e->getMessage();
@@ -385,14 +432,14 @@ try {
     // Proveedores
     $stmt = $db->query("SELECT id, nombre FROM proveedores ORDER BY nombre");
     $proveedores = $stmt->fetchAll();
-    
+
     // Categorías
     $stmt = $db->query("SELECT c.*, p.nombre as proveedor_nombre 
                        FROM categorias c 
                        JOIN proveedores p ON c.proveedor_id = p.id 
                        ORDER BY p.nombre, c.nombre");
     $categorias = $stmt->fetchAll();
-    
+
     // Paquetes
     $stmt = $db->query("SELECT p.*, 
                                prov.nombre as proveedor_nombre, 
@@ -402,7 +449,7 @@ try {
                        JOIN categorias cat ON p.categoria_id = cat.id
                        ORDER BY p.fecha_ingreso DESC");
     $paquetes = $stmt->fetchAll();
-    
+
     // Subpaquetes
     $stmt = $db->query("SELECT s.*, 
                                p.nombre as paquete_nombre, 
@@ -412,7 +459,7 @@ try {
                        JOIN paquetes p ON s.paquete_id = p.id
                        ORDER BY p.nombre, s.nombre_color");
     $subpaquetes = $stmt->fetchAll();
-    
+
     // Productos bajos en stock
     $stmt = $db->prepare("SELECT s.*, 
                                  p.nombre as paquete_nombre,
@@ -424,20 +471,20 @@ try {
                          LIMIT 10");
     $stmt->execute();
     $stock_bajo = $stmt->fetchAll();
-    
 } catch (PDOException $e) {
     $error = "Error cargando datos: " . $e->getMessage();
 }
 ?>
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Gestión de Productos - Sistema de Inventario</title>
-    
+
     <?php include 'header.php'; ?>
-    
+
     <style>
         .stats-card {
             transition: all 0.3s ease;
@@ -445,21 +492,21 @@ try {
             border-radius: 15px;
             overflow: hidden;
         }
-        
+
         .stats-card:hover {
             transform: translateY(-5px);
-            box-shadow: 0 10px 25px rgba(0,0,0,0.1) !important;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1) !important;
         }
-        
+
         .stats-icon {
             font-size: 2.5rem;
             opacity: 0.8;
         }
-        
+
         .table-actions {
             white-space: nowrap;
         }
-        
+
         .tab-content {
             background: white;
             border-radius: 0 0 15px 15px;
@@ -467,7 +514,7 @@ try {
             border: 1px solid #dee2e6;
             border-top: none;
         }
-        
+
         .nav-tabs .nav-link {
             border: 1px solid transparent;
             border-radius: 10px 10px 0 0;
@@ -476,22 +523,22 @@ try {
             color: #495057;
             transition: all 0.3s;
         }
-        
+
         .nav-tabs .nav-link:hover {
             border-color: #e9ecef;
         }
-        
+
         .nav-tabs .nav-link.active {
             color: var(--primary-color);
             background-color: white;
             border-color: #dee2e6 #dee2e6 #fff;
         }
-        
+
         .search-container {
             position: relative;
             max-width: 300px;
         }
-        
+
         .search-container i {
             position: absolute;
             left: 1rem;
@@ -499,11 +546,11 @@ try {
             transform: translateY(-50%);
             color: #6c757d;
         }
-        
+
         .search-container input {
             padding-left: 3rem;
         }
-        
+
         .color-preview {
             width: 30px;
             height: 30px;
@@ -513,7 +560,7 @@ try {
             margin-right: 8px;
             vertical-align: middle;
         }
-        
+
         .stock-indicator {
             display: inline-block;
             width: 12px;
@@ -522,15 +569,72 @@ try {
             margin-right: 5px;
             vertical-align: middle;
         }
-        
-        .stock-high { background-color: #28a745; }
-        .stock-medium { background-color: #ffc107; }
-        .stock-low { background-color: #dc3545; }
+
+        .stock-high {
+            background-color: #28a745;
+        }
+
+        .stock-medium {
+            background-color: #ffc107;
+        }
+
+        .stock-low {
+            background-color: #dc3545;
+        }
+
+        /* Estilos para la visualización de inventario */
+        .paquete-completo:hover {
+            transform: scale(1.1);
+            transition: transform 0.2s;
+            cursor: help;
+        }
+
+        .subpaquete-suelto:hover {
+            transform: translateY(-2px);
+            transition: transform 0.2s;
+            cursor: help;
+        }
+
+        .inventario-visual {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #e9ecef;
+        }
+
+        .legend-inventario {
+            display: flex;
+            gap: 15px;
+            margin-top: 10px;
+            font-size: 0.9rem;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .legend-color {
+            width: 15px;
+            height: 15px;
+            border-radius: 3px;
+        }
+
+        .legend-completo {
+            background: linear-gradient(135deg, #28a745, #20c997);
+        }
+
+        .legend-suelto {
+            background: linear-gradient(135deg, #ffc107, #fd7e14);
+            border-radius: 50%;
+        }
     </style>
 </head>
+
 <body>
     <?php include 'sidebar.php'; ?>
-    
+
     <div class="main-content">
         <div class="container-fluid py-4">
             <!-- Encabezado -->
@@ -552,7 +656,7 @@ try {
                     </button>
                 </div>
             </div>
-            
+
             <!-- Mostrar mensajes -->
             <?php if ($mensaje): ?>
                 <div class="alert alert-success alert-dismissible fade show" role="alert">
@@ -561,7 +665,7 @@ try {
                     <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
                 </div>
             <?php endif; ?>
-            
+
             <?php if ($error): ?>
                 <div class="alert alert-danger alert-dismissible fade show" role="alert">
                     <i class="fas fa-exclamation-circle me-2"></i>
@@ -569,7 +673,7 @@ try {
                     <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
                 </div>
             <?php endif; ?>
-            
+
             <!-- Estadísticas -->
             <div class="row mb-4">
                 <div class="col-xl-3 col-md-6 mb-4">
@@ -591,7 +695,7 @@ try {
                         </div>
                     </div>
                 </div>
-                
+
                 <div class="col-xl-3 col-md-6 mb-4">
                     <div class="card stats-card border-start border-info border-4">
                         <div class="card-body">
@@ -611,7 +715,7 @@ try {
                         </div>
                     </div>
                 </div>
-                
+
                 <div class="col-xl-3 col-md-6 mb-4">
                     <div class="card stats-card border-start border-warning border-4">
                         <div class="card-body">
@@ -631,7 +735,7 @@ try {
                         </div>
                     </div>
                 </div>
-                
+
                 <div class="col-xl-3 col-md-6 mb-4">
                     <div class="card stats-card border-start border-primary border-4">
                         <div class="card-body">
@@ -658,43 +762,43 @@ try {
                     </div>
                 </div>
             </div>
-            
+
             <!-- Pestañas -->
             <ul class="nav nav-tabs mb-3" id="productTabs" role="tablist">
                 <li class="nav-item" role="presentation">
-                    <button class="nav-link active" id="paquetes-tab" data-bs-toggle="tab" 
-                            data-bs-target="#paquetes" type="button" role="tab">
+                    <button class="nav-link active" id="paquetes-tab" data-bs-toggle="tab"
+                        data-bs-target="#paquetes" type="button" role="tab">
                         <i class="fas fa-box me-2"></i>Paquetes
                     </button>
                 </li>
                 <li class="nav-item" role="presentation">
-                    <button class="nav-link" id="subpaquetes-tab" data-bs-toggle="tab" 
-                            data-bs-target="#subpaquetes" type="button" role="tab">
+                    <button class="nav-link" id="subpaquetes-tab" data-bs-toggle="tab"
+                        data-bs-target="#subpaquetes" type="button" role="tab">
                         <i class="fas fa-box-open me-2"></i>Subpaquetes
                     </button>
                 </li>
                 <li class="nav-item" role="presentation">
-                    <button class="nav-link" id="stock-tab" data-bs-toggle="tab" 
-                            data-bs-target="#stock" type="button" role="tab">
+                    <button class="nav-link" id="stock-tab" data-bs-toggle="tab"
+                        data-bs-target="#stock" type="button" role="tab">
                         <i class="fas fa-chart-bar me-2"></i>Control Stock
                     </button>
                 </li>
             </ul>
-            
+
             <!-- Contenido de pestañas -->
             <div class="tab-content" id="productTabsContent">
-                
+
                 <!-- Pestaña Paquetes -->
                 <div class="tab-pane fade show active" id="paquetes" role="tabpanel">
                     <div class="d-flex justify-content-between align-items-center mb-3">
                         <h5 class="mb-0">Lista de Paquetes</h5>
                         <div class="search-container">
                             <i class="fas fa-search"></i>
-                            <input type="text" class="form-control" id="searchPaquetes" 
-                                   placeholder="Buscar paquetes...">
+                            <input type="text" class="form-control" id="searchPaquetes"
+                                placeholder="Buscar paquetes...">
                         </div>
                     </div>
-                    
+
                     <div class="table-responsive">
                         <table class="table table-hover" id="tablePaquetes">
                             <thead>
@@ -728,19 +832,19 @@ try {
                                         <td class="fw-bold text-success"><?php echo Funciones::formatearMonedaBolivianos($paquete['precio_venta_sugerido']); ?></td>
                                         <td><?php echo Funciones::formatearFecha($paquete['fecha_ingreso']); ?></td>
                                         <td class="table-actions">
-                                            <button class="btn btn-sm btn-outline-success" 
-                                                    onclick="verDetallesPaquete(<?php echo $paquete['id']; ?>)"
-                                                    title="Ver detalles">
+                                            <button class="btn btn-sm btn-outline-success"
+                                                onclick="verDetallesPaquete(<?php echo $paquete['id']; ?>)"
+                                                title="Ver detalles">
                                                 <i class="fas fa-eye"></i>
                                             </button>
-                                            <button class="btn btn-sm btn-outline-primary" 
-                                                    onclick="mostrarModalPaquete('editar', <?php echo $paquete['id']; ?>)"
-                                                    title="Editar">
+                                            <button class="btn btn-sm btn-outline-primary"
+                                                onclick="mostrarModalPaquete('editar', <?php echo $paquete['id']; ?>)"
+                                                title="Editar">
                                                 <i class="fas fa-edit"></i>
                                             </button>
-                                            <button class="btn btn-sm btn-outline-danger" 
-                                                    onclick="eliminarPaquete(<?php echo $paquete['id']; ?>)"
-                                                    title="Eliminar">
+                                            <button class="btn btn-sm btn-outline-danger"
+                                                onclick="eliminarPaquete(<?php echo $paquete['id']; ?>)"
+                                                title="Eliminar">
                                                 <i class="fas fa-trash"></i>
                                             </button>
                                         </td>
@@ -750,18 +854,18 @@ try {
                         </table>
                     </div>
                 </div>
-                
+
                 <!-- Pestaña Subpaquetes -->
                 <div class="tab-pane fade" id="subpaquetes" role="tabpanel">
                     <div class="d-flex justify-content-between align-items-center mb-3">
                         <h5 class="mb-0">Lista de Subpaquetes</h5>
                         <div class="search-container">
                             <i class="fas fa-search"></i>
-                            <input type="text" class="form-control" id="searchSubpaquetes" 
-                                   placeholder="Buscar subpaquetes...">
+                            <input type="text" class="form-control" id="searchSubpaquetes"
+                                placeholder="Buscar subpaquetes...">
                         </div>
                     </div>
-                    
+
                     <div class="table-responsive">
                         <table class="table table-hover" id="tableSubpaquetes">
                             <thead>
@@ -778,15 +882,14 @@ try {
                                 </tr>
                             </thead>
                             <tbody>
-                                <?php foreach ($subpaquetes as $subpaquete): 
+                                <?php foreach ($subpaquetes as $subpaquete):
                                     $stock_porcentaje = ($subpaquete['stock'] / $subpaquete['max_stock']) * 100;
-                                    $stock_clase = $stock_porcentaje > 50 ? 'stock-high' : 
-                                                  ($stock_porcentaje > 25 ? 'stock-medium' : 'stock-low');
+                                    $stock_clase = $stock_porcentaje > 50 ? 'stock-high' : ($stock_porcentaje > 25 ? 'stock-medium' : 'stock-low');
                                 ?>
                                     <tr>
                                         <td>
-                                            <div class="color-preview" 
-                                                 style="background: linear-gradient(135deg, #<?php echo substr(md5($subpaquete['nombre_color']), 0, 6); ?>, #<?php echo substr(md5($subpaquete['codigo_color']), 0, 6); ?>)">
+                                            <div class="color-preview"
+                                                style="background: linear-gradient(135deg, #<?php echo substr(md5($subpaquete['nombre_color']), 0, 6); ?>, #<?php echo substr(md5($subpaquete['codigo_color']), 0, 6); ?>)">
                                             </div>
                                             <?php echo htmlspecialchars($subpaquete['nombre_color']); ?>
                                         </td>
@@ -805,19 +908,19 @@ try {
                                         <td><?php echo $subpaquete['max_stock']; ?></td>
                                         <td><?php echo htmlspecialchars($subpaquete['ubicacion']); ?></td>
                                         <td class="table-actions">
-                                            <button class="btn btn-sm btn-outline-warning" 
-                                                    onclick="ajustarStock(<?php echo $subpaquete['id']; ?>)" 
-                                                    title="Ajustar stock">
+                                            <button class="btn btn-sm btn-outline-warning"
+                                                onclick="ajustarStock(<?php echo $subpaquete['id']; ?>)"
+                                                title="Ajustar stock">
                                                 <i class="fas fa-sliders-h"></i>
                                             </button>
-                                            <button class="btn btn-sm btn-outline-primary" 
-                                                    onclick="mostrarModalSubpaquete('editar', <?php echo $subpaquete['id']; ?>)"
-                                                    title="Editar">
+                                            <button class="btn btn-sm btn-outline-primary"
+                                                onclick="mostrarModalSubpaquete('editar', <?php echo $subpaquete['id']; ?>)"
+                                                title="Editar">
                                                 <i class="fas fa-edit"></i>
                                             </button>
-                                            <button class="btn btn-sm btn-outline-danger" 
-                                                    onclick="eliminarSubpaquete(<?php echo $subpaquete['id']; ?>)"
-                                                    title="Eliminar">
+                                            <button class="btn btn-sm btn-outline-danger"
+                                                onclick="eliminarSubpaquete(<?php echo $subpaquete['id']; ?>)"
+                                                title="Eliminar">
                                                 <i class="fas fa-trash"></i>
                                             </button>
                                         </td>
@@ -827,7 +930,7 @@ try {
                         </table>
                     </div>
                 </div>
-                
+
                 <!-- Pestaña Control Stock -->
                 <div class="tab-pane fade" id="stock" role="tabpanel">
                     <div class="row">
@@ -883,7 +986,7 @@ try {
                                 </div>
                             </div>
                         </div>
-                        
+
                         <div class="col-md-6">
                             <div class="card">
                                 <div class="card-header bg-success text-white">
@@ -898,7 +1001,7 @@ try {
                             </div>
                         </div>
                     </div>
-                    
+
                     <div class="card mt-4">
                         <div class="card-header bg-info text-white">
                             <h5 class="mb-0">
@@ -914,8 +1017,8 @@ try {
                                         <option value="">Seleccione un producto...</option>
                                         <?php foreach ($subpaquetes as $producto): ?>
                                             <option value="<?php echo $producto['id']; ?>"
-                                                    data-stock="<?php echo $producto['stock']; ?>"
-                                                    data-max="<?php echo $producto['max_stock']; ?>">
+                                                data-stock="<?php echo $producto['stock']; ?>"
+                                                data-max="<?php echo $producto['max_stock']; ?>">
                                                 <?php echo htmlspecialchars($producto['paquete_nombre'] . ' - ' . $producto['nombre_color']); ?>
                                                 (Stock: <?php echo $producto['stock']; ?>)
                                             </option>
@@ -924,14 +1027,14 @@ try {
                                 </div>
                                 <div class="col-md-3">
                                     <label class="form-label">Cantidad a Reponer</label>
-                                    <input type="number" class="form-control" id="cantidadReponer" 
-                                           min="1" max="1000" value="10" required>
+                                    <input type="number" class="form-control" id="cantidadReponer"
+                                        min="1" max="1000" value="10" required>
                                     <small class="text-muted" id="stockInfo"></small>
                                 </div>
                                 <div class="col-md-3">
                                     <label class="form-label">Observación</label>
                                     <input type="text" class="form-control" id="observacionReposicion"
-                                           placeholder="Motivo de reposición...">
+                                        placeholder="Motivo de reposición...">
                                 </div>
                                 <div class="col-md-2 d-flex align-items-end">
                                     <button type="button" class="btn btn-success w-100" onclick="reponerStock()">
@@ -945,7 +1048,7 @@ try {
             </div>
         </div>
     </div>
-    
+
     <!-- Modal para paquete -->
     <div class="modal fade" id="modalPaquete" tabindex="-1">
         <div class="modal-dialog modal-lg">
@@ -964,7 +1067,7 @@ try {
                             <div class="col-md-6 mb-3">
                                 <label class="form-label">Código *</label>
                                 <input type="text" class="form-control" name="codigo" id="paqueteCodigo"
-                                       title="Formato: ABC-123" required>
+                                    title="Formato: ABC-123" required>
                                 <small class="text-muted">Formato: PAQ-001</small>
                             </div>
                             <div class="col-md-6 mb-3">
@@ -999,34 +1102,34 @@ try {
                             </div>
                             <div class="col-md-4 mb-3">
                                 <label class="form-label">Subpaquetes por Paquete</label>
-                                <input type="number" class="form-control" name="subpaquetes_por_paquete" 
-                                       id="paqueteSubpaquetes" min="1" max="100" value="10" required>
+                                <input type="number" class="form-control" name="subpaquetes_por_paquete"
+                                    id="paqueteSubpaquetes" min="1" max="100" value="10" required>
                             </div>
                             <div class="col-md-4 mb-3">
                                 <label class="form-label">Costo de Compra</label>
                                 <div class="input-group">
                                     <span class="input-group-text">$</span>
-                                    <input type="number" class="form-control" name="costo" 
-                                           id="paqueteCosto" step="0.01" min="0" required>
+                                    <input type="number" class="form-control" name="costo"
+                                        id="paqueteCosto" step="0.01" min="0" required>
                                 </div>
                             </div>
                             <div class="col-md-4 mb-3">
                                 <label class="form-label">Precio Sugerido</label>
                                 <div class="input-group">
                                     <span class="input-group-text">$</span>
-                                    <input type="number" class="form-control" name="precio_venta_sugerido" 
-                                           id="paquetePrecio" step="0.01" min="0" required>
+                                    <input type="number" class="form-control" name="precio_venta_sugerido"
+                                        id="paquetePrecio" step="0.01" min="0" required>
                                 </div>
                             </div>
                             <div class="col-md-6 mb-3">
                                 <label class="form-label">Fecha de Ingreso</label>
-                                <input type="date" class="form-control" name="fecha_ingreso" 
-                                       id="paqueteFechaIngreso" value="<?php echo date('Y-m-d'); ?>" required>
+                                <input type="date" class="form-control" name="fecha_ingreso"
+                                    id="paqueteFechaIngreso" value="<?php echo date('Y-m-d'); ?>" required>
                             </div>
                             <div class="col-md-6 mb-3">
                                 <label class="form-label">Ubicación</label>
-                                <input type="text" class="form-control" name="ubicacion" 
-                                       id="paqueteUbicacion" placeholder="Ej: Estante A1">
+                                <input type="text" class="form-control" name="ubicacion"
+                                    id="paqueteUbicacion" placeholder="Ej: Estante A1">
                             </div>
                         </div>
                     </div>
@@ -1042,7 +1145,7 @@ try {
             </div>
         </div>
     </div>
-    
+
     <!-- Modal para subpaquete -->
     <div class="modal fade" id="modalSubpaquete" tabindex="-1">
         <div class="modal-dialog">
@@ -1082,29 +1185,29 @@ try {
                                 <label class="form-label">Precio de Venta</label>
                                 <div class="input-group">
                                     <span class="input-group-text">$</span>
-                                    <input type="number" class="form-control" name="precio_venta" 
-                                           id="subpaquetePrecio" step="0.01" min="0" required>
+                                    <input type="number" class="form-control" name="precio_venta"
+                                        id="subpaquetePrecio" step="0.01" min="0" required>
                                 </div>
                             </div>
                             <div class="col-md-6 mb-3">
                                 <label class="form-label">Stock Inicial</label>
-                                <input type="number" class="form-control" name="stock" 
-                                       id="subpaqueteStock" min="0" max="1000" value="0" required>
+                                <input type="number" class="form-control" name="stock"
+                                    id="subpaqueteStock" min="0" max="1000" value="0" required>
                             </div>
                             <div class="col-md-4 mb-3">
                                 <label class="form-label">Stock Mínimo</label>
-                                <input type="number" class="form-control" name="min_stock" 
-                                       id="subpaqueteMin" min="1" max="100" value="5" required>
+                                <input type="number" class="form-control" name="min_stock"
+                                    id="subpaqueteMin" min="1" max="100" value="5" required>
                             </div>
                             <div class="col-md-4 mb-3">
                                 <label class="form-label">Stock Máximo</label>
-                                <input type="number" class="form-control" name="max_stock" 
-                                       id="subpaqueteMax" min="10" max="1000" value="100" required>
+                                <input type="number" class="form-control" name="max_stock"
+                                    id="subpaqueteMax" min="10" max="1000" value="100" required>
                             </div>
                             <div class="col-md-4 mb-3">
                                 <label class="form-label">Ubicación</label>
-                                <input type="text" class="form-control" name="ubicacion" 
-                                       id="subpaqueteUbicacion" placeholder="Ej: A1-01">
+                                <input type="text" class="form-control" name="ubicacion"
+                                    id="subpaqueteUbicacion" placeholder="Ej: A1-01">
                             </div>
                         </div>
                     </div>
@@ -1120,7 +1223,7 @@ try {
             </div>
         </div>
     </div>
-    
+
     <!-- Modal para ajustar stock -->
     <div class="modal fade" id="modalAjustarStock" tabindex="-1">
         <div class="modal-dialog">
@@ -1151,14 +1254,14 @@ try {
                         </div>
                         <div class="mb-3">
                             <label class="form-label">Nuevo Stock *</label>
-                            <input type="number" class="form-control" name="stock" 
+                            <input type="number" class="form-control" name="stock"
                                 id="ajustar_nuevo_stock" min="0" max="1000" required>
                             <small class="text-muted">Ingrese la nueva cantidad de stock</small>
                         </div>
                         <div class="mb-3">
                             <label class="form-label">Observación *</label>
-                            <textarea class="form-control" name="observaciones" id="ajustar_observacion" 
-                                    rows="3" placeholder="Motivo del ajuste de stock..." required></textarea>
+                            <textarea class="form-control" name="observaciones" id="ajustar_observacion"
+                                rows="3" placeholder="Motivo del ajuste de stock..." required></textarea>
                         </div>
                         <div class="alert alert-info">
                             <i class="fas fa-info-circle me-2"></i>
@@ -1177,7 +1280,7 @@ try {
             </div>
         </div>
     </div>
-    
+
     <!-- Modal para ver detalles de paquete -->
     <div class="modal fade" id="modalDetallesPaquete" tabindex="-1">
         <div class="modal-dialog modal-xl">
@@ -1241,7 +1344,94 @@ try {
                             </table>
                         </div>
                     </div>
-                    
+
+                    <div class="mt-4">
+                        <h5 class="mb-3">
+                            <i class="fas fa-calculator me-2"></i>Inventario por Paquetes
+                        </h5>
+                        <div class="row">
+                            <div class="col-md-6 mb-4">
+                                <div class="card border-success">
+                                    <div class="card-header bg-success text-white">
+                                        <h6 class="mb-0">
+                                            <i class="fas fa-boxes me-2"></i>Resumen de Inventario
+                                        </h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <table class="table table-sm">
+                                            <tr>
+                                                <th width="60%">Subpaquetes por Paquete:</th>
+                                                <td id="detalleSubpaquetesPorPaquete" class="fw-bold text-end"></td>
+                                            </tr>
+                                            <tr>
+                                                <th>Stock Total (Subpaquetes):</th>
+                                                <td id="detalleStockTotal" class="fw-bold text-end"></td>
+                                            </tr>
+                                            <tr class="table-success">
+                                                <th>Paquetes Completos:</th>
+                                                <td id="detallePaquetesCompletos" class="fw-bold text-end"></td>
+                                            </tr>
+                                            <tr class="table-warning">
+                                                <th>Subpaquetes Sueltos:</th>
+                                                <td id="detalleSubpaquetesSueltos" class="fw-bold text-end"></td>
+                                            </tr>
+                                            <tr>
+                                                <th>Capacidad Total:</th>
+                                                <td id="detalleCapacidadTotal" class="fw-bold text-end"></td>
+                                            </tr>
+                                            <tr>
+                                                <th>Ocupación:</th>
+                                                <td id="detalleOcupacion" class="fw-bold text-end"></td>
+                                            </tr>
+                                            <tr class="table-info">
+                                                <th>Disponible para Vender:</th>
+                                                <td id="detalleDisponibleVenta" class="fw-bold text-end"></td>
+                                            </tr>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="col-md-6 mb-4">
+                                <div class="card border-primary">
+                                    <div class="card-header bg-primary text-white">
+                                        <h6 class="mb-0">
+                                            <i class="fas fa-chart-pie me-2"></i>Visualización de Inventario
+                                        </h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="inventario-visual mb-3">
+                                            <h6>Paquetes Completos:</h6>
+                                            <div id="visualPaquetes" class="d-flex flex-wrap gap-2 mb-3">
+                                                <!-- Se llenará dinámicamente con JS -->
+                                            </div>
+
+                                            <h6>Subpaquetes Sueltos:</h6>
+                                            <div id="visualSubpaquetes" class="d-flex flex-wrap gap-1">
+                                                <!-- Se llenará dinámicamente con JS -->
+                                            </div>
+                                        </div>
+
+                                        <div class="progress mb-3" style="height: 25px;">
+                                            <div id="barraOcupacion" class="progress-bar progress-bar-striped progress-bar-animated"
+                                                role="progressbar" style="width: 0%">
+                                            </div>
+                                        </div>
+
+                                        <div class="alert alert-info">
+                                            <i class="fas fa-lightbulb me-2"></i>
+                                            <small>
+                                                Cada paquete contiene <span id="infoSubpaquetesPorPaquete">0</span> subpaquetes.
+                                                <br>
+                                                <span id="infoEjemplo" class="fw-bold"></span>
+                                            </small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="mt-4">
                         <h5 class="mb-3">Subpaquetes Asociados</h5>
                         <div class="table-responsive">
@@ -1272,73 +1462,73 @@ try {
             </div>
         </div>
     </div>
-    
+
     <?php include 'footer.php'; ?>
-    
+
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    
+
     <script>
         // Inicializar DataTables
         document.addEventListener('DOMContentLoaded', function() {
             // Inicializar gráfico
             inicializarGraficoStock();
-            
+
             // Configurar búsqueda en tablas
             document.getElementById('searchPaquetes').addEventListener('input', function() {
                 filtrarTabla('tablePaquetes', this.value);
             });
-            
+
             document.getElementById('searchSubpaquetes').addEventListener('input', function() {
                 filtrarTabla('tableSubpaquetes', this.value);
             });
-            
+
             // Configurar eventos de formularios
             document.getElementById('selectReponerProducto').addEventListener('change', function() {
                 const option = this.options[this.selectedIndex];
                 const stockActual = option.dataset.stock || 0;
                 const stockMaximo = option.dataset.max || 100;
-                
-                document.getElementById('stockInfo').textContent = 
+
+                document.getElementById('stockInfo').textContent =
                     `Actual: ${stockActual}, Máximo: ${stockMaximo}`;
-                
+
                 document.getElementById('cantidadReponer').max = stockMaximo - stockActual;
             });
         });
-        
+
         // Función para filtrar tabla
         function filtrarTabla(tableId, searchText) {
             const table = document.getElementById(tableId);
             const rows = table.getElementsByTagName('tbody')[0].getElementsByTagName('tr');
             const search = searchText.toLowerCase();
-            
+
             for (let i = 0; i < rows.length; i++) {
                 const cells = rows[i].getElementsByTagName('td');
                 let found = false;
-                
+
                 for (let j = 0; j < cells.length; j++) {
                     if (cells[j].textContent.toLowerCase().includes(search)) {
                         found = true;
                         break;
                     }
                 }
-                
+
                 rows[i].style.display = found ? '' : 'none';
             }
         }
-        
+
         // Gráfico de stock
         function inicializarGraficoStock() {
             const ctx = document.getElementById('stockChart').getContext('2d');
-            
+
             // Datos del gráfico
             const bajo = <?php echo count($stock_bajo); ?>;
-            const medio = <?php echo count(array_filter($subpaquetes, function($p) { 
-                return $p['stock'] > $p['min_stock'] && $p['stock'] <= ($p['min_stock'] * 2); 
-            })); ?>;
-            const alto = <?php echo count(array_filter($subpaquetes, function($p) { 
-                return $p['stock'] > ($p['min_stock'] * 2); 
-            })); ?>;
-            
+            const medio = <?php echo count(array_filter($subpaquetes, function ($p) {
+                                return $p['stock'] > $p['min_stock'] && $p['stock'] <= ($p['min_stock'] * 2);
+                            })); ?>;
+            const alto = <?php echo count(array_filter($subpaquetes, function ($p) {
+                                return $p['stock'] > ($p['min_stock'] * 2);
+                            })); ?>;
+
             const chart = new Chart(ctx, {
                 type: 'doughnut',
                 data: {
@@ -1375,14 +1565,14 @@ try {
                 }
             });
         }
-        
+
         // Funciones CRUD para paquetes
         function mostrarModalPaquete(accion, id = null) {
             const modal = new bootstrap.Modal(document.getElementById('modalPaquete'));
             const form = document.getElementById('formPaquete');
             const title = document.getElementById('modalPaqueteTitle');
             const btn = document.getElementById('btnGuardarPaquete');
-            
+
             if (accion === 'nuevo') {
                 // Configurar para nuevo paquete
                 title.innerHTML = '<i class="fas fa-box me-2"></i>Nuevo Paquete';
@@ -1392,7 +1582,7 @@ try {
                 document.getElementById('paqueteId').value = '';
                 document.getElementById('paqueteCodigo').readOnly = false;
                 document.getElementById('paqueteFechaIngreso').value = '<?php echo date("Y-m-d"); ?>';
-                
+
             } else if (accion === 'editar' && id) {
                 // Cargar datos del paquete mediante AJAX
                 fetch(`modulo_productos.php?action=obtener_paquete&id=${id}`)
@@ -1420,7 +1610,7 @@ try {
                             document.getElementById('paquetePrecio').value = paquete.precio_venta_sugerido;
                             document.getElementById('paqueteFechaIngreso').value = paquete.fecha_ingreso;
                             document.getElementById('paqueteUbicacion').value = paquete.ubicacion || '';
-                            
+
                             modal.show();
                         } else {
                             alert(data.error || 'Error al cargar datos del paquete');
@@ -1432,10 +1622,10 @@ try {
                     });
                 return; // Salir para esperar la carga AJAX
             }
-            
+
             modal.show();
         }
-        
+
         function verDetallesPaquete(id) {
             // Cargar datos completos del paquete mediante AJAX
             fetch(`modulo_productos.php?action=obtener_paquete_completo&id=${id}`)
@@ -1449,7 +1639,113 @@ try {
                     if (data.success) {
                         const paquete = data.paquete;
                         const subpaquetes = data.subpaquetes;
-                        
+
+                        // Llenar información de inventario por paquetes
+                        if (data.inventario) {
+                            const inv = data.inventario;
+
+                            // Mostrar resumen
+                            document.getElementById('detalleSubpaquetesPorPaquete').textContent = inv.subpaquetes_por_paquete;
+                            document.getElementById('detalleStockTotal').textContent = inv.stock_total_subpaquetes + ' subpaquetes';
+                            document.getElementById('detallePaquetesCompletos').textContent = inv.paquetes_completos + ' paquetes';
+                            document.getElementById('detalleSubpaquetesSueltos').textContent = inv.subpaquetes_sueltos + ' subpaquetes';
+                            document.getElementById('detalleCapacidadTotal').textContent = inv.capacidad_total + ' subpaquetes';
+                            document.getElementById('detalleOcupacion').textContent = inv.porcentaje_ocupacion + '%';
+
+                            // Calcular disponible para vender (en subpaquetes)
+                            document.getElementById('detalleDisponibleVenta').textContent =
+                                inv.stock_total_subpaquetes + ' subpaquetes';
+
+                            // Actualizar barra de progreso
+                            const barraOcupacion = document.getElementById('barraOcupacion');
+                            barraOcupacion.style.width = inv.porcentaje_ocupacion + '%';
+                            barraOcupacion.textContent = inv.porcentaje_ocupacion + '% ocupado';
+
+                            // Colores según porcentaje
+                            if (inv.porcentaje_ocupacion < 30) {
+                                barraOcupacion.className = 'progress-bar bg-danger progress-bar-striped progress-bar-animated';
+                            } else if (inv.porcentaje_ocupacion < 70) {
+                                barraOcupacion.className = 'progress-bar bg-warning progress-bar-striped progress-bar-animated';
+                            } else {
+                                barraOcupacion.className = 'progress-bar bg-success progress-bar-striped progress-bar-animated';
+                            }
+
+                            // Visualizar paquetes completos
+                            const visualPaquetes = document.getElementById('visualPaquetes');
+                            visualPaquetes.innerHTML = '';
+
+                            for (let i = 0; i < inv.paquetes_completos && i < 20; i++) {
+                                const paqueteDiv = document.createElement('div');
+                                paqueteDiv.className = 'paquete-completo';
+                                paqueteDiv.style.cssText = `
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, #28a745, #20c997);
+            border: 2px solid #198754;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        `;
+                                paqueteDiv.title = `Paquete completo (${inv.subpaquetes_por_paquete} subpaquetes)`;
+                                paqueteDiv.innerHTML = `<small>${inv.subpaquetes_por_paquete}</small>`;
+                                visualPaquetes.appendChild(paqueteDiv);
+                            }
+
+                            if (inv.paquetes_completos > 20) {
+                                const masDiv = document.createElement('div');
+                                masDiv.className = 'ms-2 text-muted';
+                                masDiv.textContent = `+${inv.paquetes_completos - 20} más`;
+                                visualPaquetes.appendChild(masDiv);
+                            }
+
+                            // Visualizar subpaquetes sueltos
+                            const visualSubpaquetes = document.getElementById('visualSubpaquetes');
+                            visualSubpaquetes.innerHTML = '';
+
+                            for (let i = 0; i < inv.subpaquetes_sueltos; i++) {
+                                const subpaqueteDiv = document.createElement('div');
+                                subpaqueteDiv.className = 'subpaquete-suelto';
+                                subpaqueteDiv.style.cssText = `
+            width: 25px;
+            height: 25px;
+            background: linear-gradient(135deg, #ffc107, #fd7e14);
+            border: 1px solid #ffc107;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 2px;
+        `;
+                                subpaqueteDiv.title = 'Subpaquete suelto';
+                                visualSubpaquetes.appendChild(subpaqueteDiv);
+                            }
+
+                            if (inv.subpaquetes_sueltos === 0) {
+                                visualSubpaquetes.innerHTML = '<span class="text-muted">No hay subpaquetes sueltos</span>';
+                            }
+
+                            // Mostrar información de ejemplo
+                            document.getElementById('infoSubpaquetesPorPaquete').textContent = inv.subpaquetes_por_paquete;
+
+                            // Calcular ejemplo de venta
+                            const ejemploVenta = Math.min(5, inv.stock_total_subpaquetes);
+                            if (ejemploVenta > 0) {
+                                const nuevosPaquetes = Math.floor((inv.stock_total_subpaquetes - ejemploVenta) / inv.subpaquetes_por_paquete);
+                                const nuevosSueltos = (inv.stock_total_subpaquetes - ejemploVenta) % inv.subpaquetes_por_paquete;
+
+                                document.getElementById('infoEjemplo').innerHTML =
+                                    `Ejemplo: Si vendes ${ejemploVenta} subpaquetes, tendrías:<br>
+             ${nuevosPaquetes} paquetes completos y ${nuevosSueltos} subpaquetes sueltos`;
+                            } else {
+                                document.getElementById('infoEjemplo').textContent = 'Sin stock disponible';
+                            }
+                        } else {
+                            // Si no hay datos de inventario, ocultar la sección
+                            document.querySelector('.inventario-paquetes-section').style.display = 'none';
+                        }
+
                         // Llenar información general
                         document.getElementById('detalleCodigo').textContent = paquete.codigo;
                         document.getElementById('detalleNombre').textContent = paquete.nombre;
@@ -1461,20 +1757,20 @@ try {
                         document.getElementById('detalleSubpaquetes').textContent = paquete.cantidad_subpaquetes + ' / ' + paquete.subpaquetes_por_paquete;
                         document.getElementById('detalleFechaIngreso').textContent = new Date(paquete.fecha_ingreso).toLocaleDateString('es-ES');
                         document.getElementById('detalleUbicacion').textContent = paquete.ubicacion || 'No especificada';
-                        
+
                         // Llenar tabla de subpaquetes
                         const tbody = document.getElementById('cuerpoSubpaquetesDetalle');
                         tbody.innerHTML = '';
-                        
+
                         if (subpaquetes.length === 0) {
                             tbody.innerHTML = '<tr><td colspan="7" class="text-center">No hay subpaquetes asociados</td></tr>';
                         } else {
                             subpaquetes.forEach(subpaquete => {
-                                const stockClass = subpaquete.stock <= subpaquete.min_stock ? 'text-danger fw-bold' : 
-                                                   subpaquete.stock <= subpaquete.min_stock * 2 ? 'text-warning' : 'text-success';
-                                
+                                const stockClass = subpaquete.stock <= subpaquete.min_stock ? 'text-danger fw-bold' :
+                                    subpaquete.stock <= subpaquete.min_stock * 2 ? 'text-warning' : 'text-success';
+
                                 const colorHex = '#' + (subpaquete.id % 16777215).toString(16).padStart(6, '0');
-                                
+
                                 const row = document.createElement('tr');
                                 row.innerHTML = `
                                     <td>
@@ -1491,7 +1787,7 @@ try {
                                 tbody.appendChild(row);
                             });
                         }
-                        
+
                         // Mostrar modal
                         const modal = new bootstrap.Modal(document.getElementById('modalDetallesPaquete'));
                         modal.show();
@@ -1504,40 +1800,40 @@ try {
                     alert('Error al cargar detalles del paquete. Por favor, intente nuevamente.');
                 });
         }
-        
+
         function eliminarPaquete(id) {
             if (confirm('¿Está seguro de eliminar este paquete?\n\nEsta acción eliminará TODOS los subpaquetes asociados.\nEsta acción no se puede deshacer.')) {
                 const formData = new FormData();
                 formData.append('action', 'eliminar_paquete');
                 formData.append('id', id);
-                
+
                 fetch('modulo_productos.php', {
-                    method: 'POST',
-                    body: formData
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        alert(data.message);
-                        location.reload();
-                    } else {
-                        alert('Error: ' + data.message);
-                    }
-                })
-                .catch(error => {
-                    console.error('Error:', error);
-                    alert('Error al eliminar el paquete: ' + error.message);
-                });
+                        method: 'POST',
+                        body: formData
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            alert(data.message);
+                            location.reload();
+                        } else {
+                            alert('Error: ' + data.message);
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        alert('Error al eliminar el paquete: ' + error.message);
+                    });
             }
         }
-        
+
         // Funciones CRUD para subpaquetes
         function mostrarModalSubpaquete(accion, id = null) {
             const modal = new bootstrap.Modal(document.getElementById('modalSubpaquete'));
             const form = document.getElementById('formSubpaquete');
             const title = document.getElementById('modalSubpaqueteTitle');
             const btn = document.getElementById('btnGuardarSubpaquete');
-            
+
             if (accion === 'nuevo') {
                 // Configurar para nuevo subpaquete
                 title.innerHTML = '<i class="fas fa-box-open me-2"></i>Nuevo Subpaquete';
@@ -1549,9 +1845,9 @@ try {
                 document.getElementById('subpaqueteStock').value = '0';
                 document.getElementById('subpaqueteMin').value = '5';
                 document.getElementById('subpaqueteMax').value = '100';
-                
+
                 modal.show();
-                
+
             } else if (accion === 'editar' && id) {
                 // Cargar datos del subpaquete mediante AJAX
                 fetch(`modulo_productos.php?action=obtener_subpaquete&id=${id}`)
@@ -1564,7 +1860,7 @@ try {
                     .then(data => {
                         if (data.success) {
                             const subpaquete = data.data;
-                            
+
                             title.innerHTML = '<i class="fas fa-edit me-2"></i>Editar Subpaquete';
                             btn.textContent = 'Actualizar Subpaquete';
                             form.querySelector('input[name="action"]').value = 'editar_subpaquete';
@@ -1579,7 +1875,7 @@ try {
                             document.getElementById('subpaqueteMax').value = subpaquete.max_stock;
                             document.getElementById('subpaqueteUbicacion').value = subpaquete.ubicacion || '';
                             document.getElementById('subpaqueteStock').value = subpaquete.stock;
-                            
+
                             modal.show();
                         } else {
                             alert(data.error || 'Error al cargar datos del subpaquete');
@@ -1591,65 +1887,65 @@ try {
                     });
             }
         }
-        
+
         function eliminarSubpaquete(id) {
-            if (confirm('¿Está seguro de eliminar este subpaquete?\n\nEsta acción no se puede deshacer.')) {        
-            const formData = new FormData();
-            formData.append('action', 'eliminar_subpaquete');
-            formData.append('id', id);
-            
-            fetch('modulo_productos.php', {
-                method: 'POST',
-                body: formData
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    alert(data.message);
-                    location.reload();
-                } else {
-                    alert('Error: ' + data.message);
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                alert('Error al eliminar el subpaquete: ' + error.message);
-            });
+            if (confirm('¿Está seguro de eliminar este subpaquete?\n\nEsta acción no se puede deshacer.')) {
+                const formData = new FormData();
+                formData.append('action', 'eliminar_subpaquete');
+                formData.append('id', id);
+
+                fetch('modulo_productos.php', {
+                        method: 'POST',
+                        body: formData
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            alert(data.message);
+                            location.reload();
+                        } else {
+                            alert('Error: ' + data.message);
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        alert('Error al eliminar el subpaquete: ' + error.message);
+                    });
             }
         }
-        
-                // Funciones para ajustar stock - VERSIÓN CORREGIDA
+
+        // Funciones para ajustar stock - VERSIÓN CORREGIDA
         function ajustarStock(id) {
             console.log('Intentando ajustar stock para ID:', id); // Para depurar
-            
+
             // Primero intentar obtener datos directamente de la fila de la tabla
             const rows = document.querySelectorAll('#tableSubpaquetes tbody tr');
             let encontrado = false;
-            
+
             for (let row of rows) {
                 // Buscar el botón que tiene el onclick con este ID
                 const boton = row.querySelector(`button[onclick*="ajustarStock(${id})"]`);
-                
+
                 if (boton) {
                     encontrado = true;
                     const cells = row.querySelectorAll('td');
-                    
+
                     if (cells.length >= 8) {
                         // Obtener datos de la fila - corrección en los índices
-                        const nombreColor = cells[0].querySelector('.color-preview')?.nextSibling?.textContent.trim() || 
-                                        cells[0].textContent.replace(/[\s\S]*color-preview[\s\S]*/, '').trim();
-                        const stockActual = cells[4].querySelector('span.fw-bold')?.textContent.trim() || 
-                                        cells[4].textContent.trim();
+                        const nombreColor = cells[0].querySelector('.color-preview')?.nextSibling?.textContent.trim() ||
+                            cells[0].textContent.replace(/[\s\S]*color-preview[\s\S]*/, '').trim();
+                        const stockActual = cells[4].querySelector('span.fw-bold')?.textContent.trim() ||
+                            cells[4].textContent.trim();
                         const stockMin = cells[5].textContent.trim();
                         const stockMax = cells[6].textContent.trim();
-                        
+
                         console.log('Datos encontrados en tabla:', {
                             nombreColor,
                             stockActual,
                             stockMin,
                             stockMax
                         });
-                        
+
                         // Llenar el formulario
                         document.getElementById('ajustar_id').value = id;
                         document.getElementById('ajustar_nombre').value = nombreColor;
@@ -1659,7 +1955,7 @@ try {
                         document.getElementById('ajustar_nuevo_stock').min = 0;
                         document.getElementById('ajustar_nuevo_stock').max = stockMax;
                         document.getElementById('ajustar_observacion').value = '';
-                        
+
                         // Mostrar el modal
                         const modal = new bootstrap.Modal(document.getElementById('modalAjustarStock'));
                         modal.show();
@@ -1667,7 +1963,7 @@ try {
                     }
                 }
             }
-            
+
             // Si no se encontró en la tabla, cargar por AJAX
             if (!encontrado) {
                 console.log('No encontrado en tabla, cargando por AJAX...');
@@ -1681,7 +1977,7 @@ try {
 
         function cargarDatosSubpaqueteParaAjuste(id) {
             console.log('Cargando datos por AJAX para ID:', id);
-            
+
             fetch(`modulo_productos.php?action=obtener_subpaquete&id=${id}`)
                 .then(response => {
                     if (!response.ok) {
@@ -1693,7 +1989,7 @@ try {
                     console.log('Respuesta AJAX:', data);
                     if (data.success) {
                         const subpaquete = data.data;
-                        
+
                         document.getElementById('ajustar_id').value = id;
                         document.getElementById('ajustar_nombre').value = subpaquete.nombre_color;
                         document.getElementById('ajustar_stock_actual').value = subpaquete.stock;
@@ -1702,7 +1998,7 @@ try {
                         document.getElementById('ajustar_nuevo_stock').min = 0;
                         document.getElementById('ajustar_nuevo_stock').max = subpaquete.max_stock;
                         document.getElementById('ajustar_observacion').value = '';
-                        
+
                         const modal = new bootstrap.Modal(document.getElementById('modalAjustarStock'));
                         modal.show();
                     } else {
@@ -1719,167 +2015,167 @@ try {
         document.getElementById('formAjustarStock').addEventListener('submit', function(e) {
             e.preventDefault();
             e.stopPropagation();
-            
+
             const form = e.target;
             const formData = new FormData(form);
             const btn = form.querySelector('#btnAjustarStock');
             const originalBtnText = btn.innerHTML;
-            
+
             // Validación
             const nuevoStock = document.getElementById('ajustar_nuevo_stock').value;
             const stockActual = document.getElementById('ajustar_stock_actual').value;
             const observacion = document.getElementById('ajustar_observacion').value;
-            
+
             if (!observacion.trim()) {
                 alert('Por favor ingrese una observación para el ajuste');
                 document.getElementById('ajustar_observacion').focus();
                 return false;
             }
-    
-        // Confirmar si es un ajuste significativo
+
+            // Confirmar si es un ajuste significativo
             const diferencia = Math.abs(parseInt(nuevoStock) - parseInt(stockActual));
             if (diferencia > 10) {
                 if (!confirm(`¿Está seguro de ajustar el stock en ${diferencia} unidades?`)) {
                     return false;
                 }
             }
-            
+
             // Cambiar texto del botón y deshabilitarlo
             btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Procesando...';
             btn.disabled = true;
-            
+
             // Enviar por AJAX
             fetch('modulo_productos.php', {
-                method: 'POST',
-                body: formData
-            })
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error('Error en la respuesta del servidor');
-                }
-                return response.json();
-            })
-            .then(data => {
-                console.log('Respuesta del servidor:', data);
-                if (data.success) {
-                    // Mostrar mensaje de éxito
-                    Swal.fire({
-                        icon: 'success',
-                        title: '¡Éxito!',
-                        text: data.message || 'Stock ajustado exitosamente',
-                        timer: 2000,
-                        showConfirmButton: false
-                    });
-                    
-                    // Cerrar el modal
-                    const modal = bootstrap.Modal.getInstance(document.getElementById('modalAjustarStock'));
-                    modal.hide();
-                    
-                    // Recargar la página después de un breve tiempo
-                    setTimeout(() => {
-                        location.reload();
-                    }, 1500);
-                    
-                } else {
-                    // Restaurar botón
-                    btn.innerHTML = originalBtnText;
-                    btn.disabled = false;
-                    
-                    // Mostrar error
-                    Swal.fire({
-                        icon: 'error',
-                        title: 'Error',
-                        text: data.message || 'Error desconocido al ajustar stock'
-                    });
-                }
-            })
-            .catch(error => {
-                // Restaurar botón
-                btn.innerHTML = originalBtnText;
-                btn.disabled = false;
-                
-                console.error('Error:', error);
-                Swal.fire({
-                    icon: 'error',
-                    title: 'Error de conexión',
-                    text: 'Error al ajustar stock: ' + error.message
-                });
-            });
-            
-            return false;
-        });
-        
-        function reponerStock() {
-            const productoId = document.getElementById('selectReponerProducto').value;
-            const cantidad = document.getElementById('cantidadReponer').value;
-            const observacion = document.getElementById('observacionReposicion').value;
-            
-            if (!productoId) {
-                alert('Seleccione un producto');
-                document.getElementById('selectReponerProducto').focus();
-                return;
-            }
-            
-            if (!cantidad || cantidad <= 0) {
-                alert('Ingrese una cantidad válida');
-                document.getElementById('cantidadReponer').focus();
-                return;
-            }
-            
-            const option = document.getElementById('selectReponerProducto').options[document.getElementById('selectReponerProducto').selectedIndex];
-            const stockActual = parseInt(option.dataset.stock) || 0;
-            const stockMaximo = parseInt(option.dataset.max) || 100;
-            const productoNombre = option.text.split('(')[0].trim();
-            const nuevoStock = stockActual + parseInt(cantidad);
-            
-            // Validar que no exceda el máximo
-            if (nuevoStock > stockMaximo) {
-                alert(`No puede reponer ${cantidad} unidades porque excedería el stock máximo (${stockMaximo}).\nStock actual: ${stockActual}\nMáximo permitido: ${stockMaximo}`);
-                return;
-            }
-            
-            if (confirm(`¿Reponer ${cantidad} unidades de "${productoNombre}"?\n\nStock actual: ${stockActual}\nNuevo stock: ${nuevoStock}`)) {
-                
-                const formData = new FormData();
-                formData.append('action', 'ajustar_stock');
-                formData.append('id', productoId);
-                formData.append('stock', nuevoStock);
-                formData.append('observaciones', `Reposición rápida: ${observacion || 'Reposición de stock'}`);
-                
-                // Mostrar indicador de carga
-                const btn = document.querySelector('#formReposicionRapida button[type="button"]');
-                const originalBtnText = btn.innerHTML;
-                btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Reponiendo...';
-                btn.disabled = true;
-                
-                fetch('modulo_productos.php', {
                     method: 'POST',
                     body: formData
                 })
-                .then(response => response.json())
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Error en la respuesta del servidor');
+                    }
+                    return response.json();
+                })
                 .then(data => {
+                    console.log('Respuesta del servidor:', data);
                     if (data.success) {
-                        alert(data.message || 'Stock repuesto exitosamente');
-                        location.reload();
+                        // Mostrar mensaje de éxito
+                        Swal.fire({
+                            icon: 'success',
+                            title: '¡Éxito!',
+                            text: data.message || 'Stock ajustado exitosamente',
+                            timer: 2000,
+                            showConfirmButton: false
+                        });
+
+                        // Cerrar el modal
+                        const modal = bootstrap.Modal.getInstance(document.getElementById('modalAjustarStock'));
+                        modal.hide();
+
+                        // Recargar la página después de un breve tiempo
+                        setTimeout(() => {
+                            location.reload();
+                        }, 1500);
+
                     } else {
                         // Restaurar botón
                         btn.innerHTML = originalBtnText;
                         btn.disabled = false;
-                        
-                        alert('Error: ' + (data.message || 'Error al reponer stock'));
+
+                        // Mostrar error
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Error',
+                            text: data.message || 'Error desconocido al ajustar stock'
+                        });
                     }
                 })
                 .catch(error => {
                     // Restaurar botón
                     btn.innerHTML = originalBtnText;
                     btn.disabled = false;
-                    
+
                     console.error('Error:', error);
-                    alert('Error de conexión al reponer stock: ' + error.message);
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Error de conexión',
+                        text: 'Error al ajustar stock: ' + error.message
+                    });
                 });
+
+            return false;
+        });
+
+        function reponerStock() {
+            const productoId = document.getElementById('selectReponerProducto').value;
+            const cantidad = document.getElementById('cantidadReponer').value;
+            const observacion = document.getElementById('observacionReposicion').value;
+
+            if (!productoId) {
+                alert('Seleccione un producto');
+                document.getElementById('selectReponerProducto').focus();
+                return;
+            }
+
+            if (!cantidad || cantidad <= 0) {
+                alert('Ingrese una cantidad válida');
+                document.getElementById('cantidadReponer').focus();
+                return;
+            }
+
+            const option = document.getElementById('selectReponerProducto').options[document.getElementById('selectReponerProducto').selectedIndex];
+            const stockActual = parseInt(option.dataset.stock) || 0;
+            const stockMaximo = parseInt(option.dataset.max) || 100;
+            const productoNombre = option.text.split('(')[0].trim();
+            const nuevoStock = stockActual + parseInt(cantidad);
+
+            // Validar que no exceda el máximo
+            if (nuevoStock > stockMaximo) {
+                alert(`No puede reponer ${cantidad} unidades porque excedería el stock máximo (${stockMaximo}).\nStock actual: ${stockActual}\nMáximo permitido: ${stockMaximo}`);
+                return;
+            }
+
+            if (confirm(`¿Reponer ${cantidad} unidades de "${productoNombre}"?\n\nStock actual: ${stockActual}\nNuevo stock: ${nuevoStock}`)) {
+
+                const formData = new FormData();
+                formData.append('action', 'ajustar_stock');
+                formData.append('id', productoId);
+                formData.append('stock', nuevoStock);
+                formData.append('observaciones', `Reposición rápida: ${observacion || 'Reposición de stock'}`);
+
+                // Mostrar indicador de carga
+                const btn = document.querySelector('#formReposicionRapida button[type="button"]');
+                const originalBtnText = btn.innerHTML;
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Reponiendo...';
+                btn.disabled = true;
+
+                fetch('modulo_productos.php', {
+                        method: 'POST',
+                        body: formData
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            alert(data.message || 'Stock repuesto exitosamente');
+                            location.reload();
+                        } else {
+                            // Restaurar botón
+                            btn.innerHTML = originalBtnText;
+                            btn.disabled = false;
+
+                            alert('Error: ' + (data.message || 'Error al reponer stock'));
+                        }
+                    })
+                    .catch(error => {
+                        // Restaurar botón
+                        btn.innerHTML = originalBtnText;
+                        btn.disabled = false;
+
+                        console.error('Error:', error);
+                        alert('Error de conexión al reponer stock: ' + error.message);
+                    });
             }
         }
-        
+
         // Validación de formulario de paquete
         document.getElementById('formPaquete').addEventListener('submit', function(e) {
             const codigo = document.getElementById('paqueteCodigo').value;
@@ -1888,44 +2184,44 @@ try {
             const categoria = document.getElementById('paqueteCategoria').value;
             const costo = document.getElementById('paqueteCosto').value;
             const precio = document.getElementById('paquetePrecio').value;
-            
+
             if (!codigo.trim()) {
                 alert('El código es obligatorio');
                 e.preventDefault();
                 return;
             }
-            
+
             if (!nombre.trim()) {
                 alert('El nombre es obligatorio');
                 e.preventDefault();
                 return;
             }
-            
+
             if (!proveedor) {
                 alert('Seleccione un proveedor');
                 e.preventDefault();
                 return;
             }
-            
+
             if (!categoria) {
                 alert('Seleccione una categoría');
                 e.preventDefault();
                 return;
             }
-            
+
             if (!costo || parseFloat(costo) <= 0) {
                 alert('Ingrese un costo válido');
                 e.preventDefault();
                 return;
             }
-            
+
             if (!precio || parseFloat(precio) <= 0) {
                 alert('Ingrese un precio sugerido válido');
                 e.preventDefault();
                 return;
             }
         });
-        
+
         // Validación de formulario de subpaquete
         document.getElementById('formSubpaquete').addEventListener('submit', function(e) {
             const paquete = document.getElementById('subpaquetePaquete').value;
@@ -1934,43 +2230,43 @@ try {
             const precio = document.getElementById('subpaquetePrecio').value;
             const stockMin = document.getElementById('subpaqueteMin').value;
             const stockMax = document.getElementById('subpaqueteMax').value;
-            
+
             if (!paquete) {
                 alert('Seleccione un paquete');
                 e.preventDefault();
                 return;
             }
-            
+
             if (!codigo.trim()) {
                 alert('El código de color es obligatorio');
                 e.preventDefault();
                 return;
             }
-            
+
             if (!nombre.trim()) {
                 alert('El nombre de color es obligatorio');
                 e.preventDefault();
                 return;
             }
-            
+
             if (!precio || parseFloat(precio) <= 0) {
                 alert('Ingrese un precio de venta válido');
                 e.preventDefault();
                 return;
             }
-            
+
             if (!stockMin || parseInt(stockMin) <= 0) {
                 alert('Ingrese un stock mínimo válido');
                 e.preventDefault();
                 return;
             }
-            
+
             if (!stockMax || parseInt(stockMax) <= 0) {
                 alert('Ingrese un stock máximo válido');
                 e.preventDefault();
                 return;
             }
-            
+
             if (parseInt(stockMax) <= parseInt(stockMin)) {
                 alert('El stock máximo debe ser mayor que el stock mínimo');
                 e.preventDefault();
@@ -1979,4 +2275,5 @@ try {
         });
     </script>
 </body>
+
 </html>
