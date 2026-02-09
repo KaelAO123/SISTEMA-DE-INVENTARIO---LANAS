@@ -4,6 +4,8 @@ Sistema de inventario y punto de venta desarrollado en **PHP + MySQL**, orientad
 Pensado para funcionar de forma **local** (XAMPP / WAMP / LAMP) de manera simple, clara y extensible.
 
 ---
+[![Captura-de-pantalla-2026-02-07-002621.png](https://i.postimg.cc/BvvqVwMz/Captura-de-pantalla-2026-02-07-002621.png)](https://postimg.cc/DStkW5VQ)
+---
 
 ## 📌 Características principales
 
