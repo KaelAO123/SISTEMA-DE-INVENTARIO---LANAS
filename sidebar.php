@@ -117,13 +117,13 @@
             minute: '2-digit',
             second: '2-digit'
         };
-        document.getElementById('currentDateTime').textContent = 
-            now.toLocaleDateString('es-ES', options);
+        
+        document.getElementById('currentDateTime').textContent = now.toLocaleDateString('es-ES',options);
     }
     
     // Actualizar cada segundo
-    setInterval(updateDateTime, 1000);
-    updateDateTime();
+    // setInterval(updateDateTime, 1000);
+    // updateDateTime();
     
     // Toggle sidebar en móviles
     document.getElementById('sidebarToggle').addEventListener('click', function() {

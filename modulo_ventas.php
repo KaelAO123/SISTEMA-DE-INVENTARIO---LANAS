@@ -18,35 +18,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['accion'])) {
             $descuento = floatval($_POST['descuento'] ?? 0);
             $productos_json = $_POST['productos'] ?? '[]';
             $productos = json_decode($productos_json, true);
-            
+
             if (empty($productos)) {
                 throw new Exception("No hay productos en el carrito");
             }
-            
+
             $db->beginTransaction();
-            
+
             // 1. Validar stock y calcular total
             $subtotal = 0;
             $detalles = [];
-            
+
             foreach ($productos as $producto) {
                 $stmt = $db->prepare("SELECT precio_venta, stock, nombre_color, codigo_color 
                                      FROM subpaquetes WHERE id = ? AND activo = 1");
                 $stmt->execute([$producto['id']]);
                 $info = $stmt->fetch();
-                
+
                 if (!$info) {
                     throw new Exception("Producto no encontrado o inactivo");
                 }
-                
+
                 if ($info['stock'] < $producto['cantidad']) {
                     throw new Exception("Stock insuficiente: {$info['nombre_color']} (Disponible: {$info['stock']})");
                 }
-                
+
                 $precio = $info['precio_venta'];
                 $total_item = $precio * $producto['cantidad'];
                 $subtotal += $total_item;
-                
+
                 $detalles[] = [
                     'id' => $producto['id'],
                     'cantidad' => $producto['cantidad'],
@@ -57,37 +57,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['accion'])) {
                     'stock_anterior' => $info['stock']
                 ];
             }
-            
+
             // 2. Calcular totales
             if ($descuento > $subtotal) {
                 $descuento = $subtotal;
             }
-            
+
             $subtotal_neto = $subtotal - $descuento;
             $iva = 0;
-            $total = $subtotal_neto ;
-            
+            $total = $subtotal_neto;
+
             // 3. Generar código único
             $codigo_venta = 'V-' . date('Ymd') . '-' . str_pad(rand(1, 9999), 4, '0', STR_PAD_LEFT);
-            
+
             // Verificar que el código no exista
             $stmt = $db->prepare("SELECT COUNT(*) FROM ventas WHERE codigo_venta = ?");
             $stmt->execute([$codigo_venta]);
             if ($stmt->fetchColumn() > 0) {
                 $codigo_venta .= '-' . time();
             }
-            
+
             // 4. Determinar pagado y debe
             $pagado = ($tipo_pago === 'contado') ? $total : 0;
             $debe = $total - $pagado;
             $estado = ($tipo_pago === 'contado') ? 'pagada' : 'pendiente';
-            
+
             // 5. Insertar venta
             $stmt = $db->prepare("INSERT INTO ventas 
                 (codigo_venta, cliente_id, vendedor_id, subtotal, descuento, iva, total,
                  pagado, debe, tipo_pago, estado, fecha_hora, observaciones, anulado)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), ?, FALSE)");
-            
+
             $stmt->execute([
                 $codigo_venta,
                 $cliente_id,
@@ -102,26 +102,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['accion'])) {
                 $estado,
                 $observaciones
             ]);
-            
+
             $venta_id = $db->lastInsertId();
-            
+
             // 
             foreach ($detalles as $detalle) {
                 // 1. Verificar que el subpaquete existe y está activo
                 $stmt = $db->prepare("SELECT id, stock FROM subpaquetes WHERE id = ? AND activo = 1");
                 $stmt->execute([$detalle['id']]);
                 $subpaquete = $stmt->fetch();
-                
+
                 if (!$subpaquete) {
                     throw new Exception("Producto con ID {$detalle['id']} no existe o está inactivo");
                 }
-                
+
                 // 2. Validar stock disponible (opcional pero recomendado)
                 $stock_anterior = $subpaquete['stock'];
                 if ($detalle['cantidad'] > $stock_anterior) {
                     throw new Exception("Stock insuficiente para el producto ID {$detalle['id']}. Disponible: {$stock_anterior}, Solicitado: {$detalle['cantidad']}");
                 }
-                
+
                 // 3. Insertar detalle de venta
                 $stmt = $db->prepare("INSERT INTO venta_detalles 
                     (venta_id, subpaquete_id, cantidad, precio_unitario, subtotal, hora_extraccion)
@@ -133,10 +133,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['accion'])) {
                     $detalle['precio'],
                     $detalle['total']
                 ]);
-                
+
                 // 4. Calcular nuevo stock
                 $nuevo_stock = $stock_anterior - $detalle['cantidad'];
-                
+
                 // 5. Actualizar stock del subpaquete
                 $stmt = $db->prepare("UPDATE subpaquetes 
                                     SET stock = ?, 
@@ -144,11 +144,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['accion'])) {
                                         fecha_ultima_venta = CURDATE()
                                     WHERE id = ?");
                 $stmt->execute([
-                    $nuevo_stock, 
-                    $detalle['cantidad'], 
+                    $nuevo_stock,
+                    $detalle['cantidad'],
                     $detalle['id']
                 ]);
-                
+
                 // 6. Registrar movimiento de stock
                 $stmt = $db->prepare("INSERT INTO movimientos_stock 
                     (subpaquete_id, tipo, cantidad, stock_anterior, stock_nuevo, usuario_id, fecha_hora, observaciones)
@@ -161,9 +161,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['accion'])) {
                     $_SESSION['usuario_id'],
                     "Venta #{$codigo_venta}"
                 ]);
-                
             }
-            
+
             // 7. Actualizar cliente si es crédito
             if ($tipo_pago === 'credito' && $cliente_id > 0) {
                 $stmt = $db->prepare("UPDATE clientes 
@@ -172,13 +171,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['accion'])) {
                                          total_comprado = COALESCE(total_comprado, 0) + ?
                                      WHERE id = ?");
                 $stmt->execute([$debe, $total, $cliente_id]);
-                
+
                 // Registrar en cuentas por cobrar
                 $stmt = $db->prepare("SELECT saldo_deuda FROM clientes WHERE id = ?");
                 $stmt->execute([$cliente_id]);
                 $saldo_actual = $stmt->fetchColumn();
                 $saldo_anterior = $saldo_actual - $debe;
-                
+
                 $stmt = $db->prepare("INSERT INTO cuentas_cobrar 
                     (cliente_id, tipo, monto, saldo_anterior, saldo_nuevo, fecha_hora, usuario_id)
                     VALUES (?, 'venta', ?, ?, ?, NOW(), ?)");
@@ -197,13 +196,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['accion'])) {
                                      WHERE id = ?");
                 $stmt->execute([$total, $cliente_id]);
             }
-            
+
             $db->commit();
-            
+
             // Guardar ID de venta para redirección
             $_SESSION['venta_procesada_id'] = $venta_id;
             $_SESSION['venta_procesada_codigo'] = $codigo_venta;
-            
+
             // Responder con JSON
             header('Content-Type: application/json');
             echo json_encode([
@@ -213,12 +212,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['accion'])) {
                 'redirect' => 'imprimir_recibo.php?id=' . $venta_id
             ]);
             exit();
-            
         } catch (Exception $e) {
             if ($db->inTransaction()) {
                 $db->rollBack();
             }
-            
+
             header('Content-Type: application/json');
             http_response_code(400);
             echo json_encode([
@@ -228,7 +226,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['accion'])) {
             exit();
         }
     }
-    
+
     // Guardar nuevo cliente
     if ($_POST['accion'] === 'guardar_cliente') {
         try {
@@ -236,23 +234,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['accion'])) {
             $telefono = Funciones::sanitizar($_POST['telefono'] ?? '');
             $email = Funciones::sanitizar($_POST['email'] ?? '');
             $limite_credito = floatval($_POST['limite_credito'] ?? 500);
-            
+
             if (empty($nombre)) {
                 throw new Exception("El nombre es obligatorio");
             }
-            
+
             $stmt = $db->prepare("INSERT INTO clientes 
                 (nombre, telefono, email, limite_credito, saldo_deuda, activo, creado_en)
                 VALUES (?, ?, ?, ?, 0, TRUE, NOW())");
-            
+
             $stmt->execute([$nombre, $telefono, $email, $limite_credito]);
             $cliente_id = $db->lastInsertId();
-            
+
             // Obtener info del cliente
             $stmt = $db->prepare("SELECT id, nombre, telefono, email, saldo_deuda, limite_credito FROM clientes WHERE id = ?");
             $stmt->execute([$cliente_id]);
             $cliente = $stmt->fetch();
-            
+
             header('Content-Type: application/json');
             echo json_encode([
                 'success' => true,
@@ -260,7 +258,140 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['accion'])) {
                 'message' => 'Cliente guardado exitosamente'
             ]);
             exit();
-            
+        } catch (Exception $e) {
+            header('Content-Type: application/json');
+            http_response_code(400);
+            echo json_encode([
+                'success' => false,
+                'error' => $e->getMessage()
+            ]);
+            exit();
+        }
+    }
+
+    if ($_POST['accion'] === 'reducir_deuda') {
+        try {
+            $cliente_id = intval($_POST['cliente_id']);
+            $monto = floatval($_POST['monto']);
+            $descripcion = Funciones::sanitizar($_POST['descripcion'] ?? 'Pago de deuda');
+
+            if ($cliente_id <= 0 || $monto <= 0) {
+                throw new Exception("Datos inválidos");
+            }
+
+            $db->beginTransaction();
+
+            $stmt = $db->prepare("SELECT saldo_deuda, limite_credito FROM clientes WHERE id = ?");
+            $stmt->execute([$cliente_id]);
+            $cliente = $stmt->fetch();
+
+            if (!$cliente) {
+                throw new Exception("Cliente no encontrado");
+            }
+
+            $deuda_anterior = $cliente['saldo_deuda'];
+            $limite_actual = $cliente['limite_credito'];
+
+            if ($monto > $deuda_anterior) {
+                $monto = $deuda_anterior;
+            }
+
+            $nueva_deuda = $deuda_anterior - $monto;
+            $nuevo_limite = $limite_actual + $monto;
+
+            $stmt = $db->prepare("UPDATE clientes 
+                                SET saldo_deuda = ?, 
+                                    limite_credito = ?,
+                                    total_comprado = COALESCE(total_comprado, 0) + ?
+                                WHERE id = ?");
+            $stmt->execute([$nueva_deuda, $nuevo_limite, $monto, $cliente_id]);
+
+            $stmt = $db->prepare("INSERT INTO cuentas_cobrar 
+                (cliente_id, tipo, monto, saldo_anterior, saldo_nuevo, fecha_hora, usuario_id)
+                VALUES (?, 'pago', ?, ?, ?, NOW(), ?)");
+            $stmt->execute([
+                $cliente_id,
+                $monto,
+                $deuda_anterior,
+                $nueva_deuda,
+                $_SESSION['usuario_id']
+            ]);
+
+            $db->commit();
+
+            $stmt = $db->prepare("SELECT id, nombre, saldo_deuda, limite_credito FROM clientes WHERE id = ?");
+            $stmt->execute([$cliente_id]);
+            $cliente_actualizado = $stmt->fetch();
+
+            header('Content-Type: application/json');
+            echo json_encode([
+                'success' => true,
+                'message' => 'Deuda reducida exitosamente',
+                'cliente' => $cliente_actualizado,
+                'pago_realizado' => $monto
+            ]);
+            exit();
+        } catch (Exception $e) {
+            if ($db->inTransaction()) {
+                $db->rollBack();
+            }
+
+            header('Content-Type: application/json');
+            http_response_code(400);
+            echo json_encode([
+                'success' => false,
+                'error' => $e->getMessage()
+            ]);
+            exit();
+        }
+    }
+
+    if ($_POST['accion'] === 'recargar_credito') {
+        try {
+            $cliente_id = intval($_POST['cliente_id']);
+            $monto = floatval($_POST['monto']);
+            $descripcion = Funciones::sanitizar($_POST['descripcion'] ?? 'Recarga de crédito');
+
+            if ($cliente_id <= 0 || $monto <= 0) {
+                throw new Exception("Datos inválidos");
+            }
+
+            $stmt = $db->prepare("SELECT limite_credito FROM clientes WHERE id = ?");
+            $stmt->execute([$cliente_id]);
+            $cliente = $stmt->fetch();
+
+            if (!$cliente) {
+                throw new Exception("Cliente no encontrado");
+            }
+
+            $limite_anterior = $cliente['limite_credito'];
+            $nuevo_limite = $limite_anterior + $monto;
+
+            $stmt = $db->prepare("UPDATE clientes SET limite_credito = ? WHERE id = ?");
+            $stmt->execute([$nuevo_limite, $cliente_id]);
+
+            $stmt = $db->prepare("INSERT INTO cuentas_cobrar 
+                (cliente_id, tipo, monto, saldo_anterior, saldo_nuevo, fecha_hora, usuario_id)
+                VALUES (?, 'abono', ?, ?, ?, NOW(), ?)");
+            $stmt->execute([
+                $cliente_id,
+                $monto,
+                $limite_anterior,
+                $nuevo_limite,
+                $_SESSION['usuario_id']
+            ]);
+
+            $stmt = $db->prepare("SELECT id, nombre, saldo_deuda, limite_credito FROM clientes WHERE id = ?");
+            $stmt->execute([$cliente_id]);
+            $cliente_actualizado = $stmt->fetch();
+
+            header('Content-Type: application/json');
+            echo json_encode([
+                'success' => true,
+                'message' => 'Crédito recargado exitosamente',
+                'cliente' => $cliente_actualizado
+            ]);
+            exit();
         } catch (Exception $e) {
             header('Content-Type: application/json');
             http_response_code(400);
@@ -273,7 +404,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['accion'])) {
     }
 }
 
-// Cargar datos
 $clientes = [];
 $productos = [];
 
@@ -282,7 +412,7 @@ try {
     $stmt = $db->query("SELECT id, nombre, telefono, email, saldo_deuda, limite_credito 
                        FROM clientes WHERE activo = 1 ORDER BY nombre");
     $clientes = $stmt->fetchAll();
-    
+
     // Productos con stock disponible
     $stmt = $db->query("SELECT sp.*, 
                               COALESCE(p.codigo, 'SIN-CAT') as categoria,
@@ -293,7 +423,6 @@ try {
                        WHERE sp.activo = 1 AND sp.stock > 0 
                        ORDER BY categoria_nombre, sp.nombre_color");
     $productos = $stmt->fetchAll();
-    
 } catch (PDOException $e) {
     $error = "Error cargando datos: " . $e->getMessage();
 }
@@ -303,19 +432,20 @@ Funciones::mostrarAlertaSesion();
 ?>
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Punto de Venta - Sistema Lanas</title>
     <?php include 'header.php'; ?>
-    
+
     <!-- Bootstrap 5 -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    
+
     <style>
         :root {
             --verde-principal: #28a745;
@@ -326,11 +456,11 @@ Funciones::mostrarAlertaSesion();
             --gris-oscuro: #6c757d;
             --azul-claro: #e3f2fd;
         }
-        
+
         * {
             box-sizing: border-box;
         }
-        
+
         body {
             font-family: 'Inter', sans-serif;
             background: #f5f7fa;
@@ -338,13 +468,13 @@ Funciones::mostrarAlertaSesion();
             padding: 0;
             min-height: 100vh;
         }
-        
+
         /* Layout Principal */
         .main-wrapper {
             display: flex;
             min-height: 100vh;
         }
-        
+
 
         /* Contenido principal */
         .main-content {
@@ -353,30 +483,30 @@ Funciones::mostrarAlertaSesion();
             padding: 20px;
             min-height: calc(100vh - 60px);
         }
-        
+
         /* Punto de Venta */
         .pos-container {
             background: white;
             border-radius: 15px;
-            box-shadow: 0 5px 25px rgba(0,0,0,0.08);
+            box-shadow: 0 5px 25px rgba(0, 0, 0, 0.08);
             overflow: hidden;
             margin-bottom: 30px;
         }
-        
+
         .pos-header {
             background: linear-gradient(135deg, var(--verde-principal), var(--verde-oscuro));
             color: white;
             padding: 20px 30px;
-            border-bottom: 3px solid rgba(255,255,255,0.2);
+            border-bottom: 3px solid rgba(255, 255, 255, 0.2);
         }
-        
+
         .pos-body {
             display: flex;
             min-height: 650px;
-            max-height: 1500px; 
+            max-height: 1500px;
             overflow: hidden;
         }
-        
+
         /* Sección productos */
         .products-section {
             flex: 3;
@@ -384,15 +514,16 @@ Funciones::mostrarAlertaSesion();
             background: var(--gris-claro);
             border-right: 2px solid var(--gris-medio);
             overflow-y: auto;
-            height: calc(100vh - 250px); /* Altura ajustada dinámicamente */
+            height: calc(100vh - 250px);
+            /* Altura ajustada dinámicamente */
             min-height: 500px;
         }
-        
+
         .search-container {
             position: relative;
             margin-bottom: 25px;
         }
-        
+
         .search-container i {
             position: absolute;
             left: 20px;
@@ -401,7 +532,7 @@ Funciones::mostrarAlertaSesion();
             color: var(--verde-principal);
             z-index: 2;
         }
-        
+
         .search-container input {
             padding: 12px 20px 12px 50px;
             border: 2px solid var(--gris-medio);
@@ -410,13 +541,13 @@ Funciones::mostrarAlertaSesion();
             width: 100%;
             transition: all 0.3s;
         }
-        
+
         .search-container input:focus {
             border-color: var(--verde-principal);
             box-shadow: 0 0 0 3px rgba(40, 167, 69, 0.25);
             outline: none;
         }
-        
+
         /* Grid de productos */
         .product-grid {
             display: grid;
@@ -424,7 +555,7 @@ Funciones::mostrarAlertaSesion();
             gap: 20px;
             margin-top: 20px;
         }
-        
+
         .product-card {
             background: white;
             border: 2px solid var(--gris-medio);
@@ -436,25 +567,33 @@ Funciones::mostrarAlertaSesion();
             position: relative;
             overflow: hidden;
         }
-        
+
         .product-card:hover {
             transform: translateY(-5px);
             border-color: var(--verde-principal);
             box-shadow: 0 15px 30px rgba(40, 167, 69, 0.15);
         }
-        
+
         .product-card.selected {
             background: var(--verde-claro);
             border-color: var(--verde-principal);
             animation: pulse 0.5s ease-in-out;
         }
-        
+
         @keyframes pulse {
-            0% { transform: scale(1); }
-            50% { transform: scale(1.03); }
-            100% { transform: scale(1); }
+            0% {
+                transform: scale(1);
+            }
+
+            50% {
+                transform: scale(1.03);
+            }
+
+            100% {
+                transform: scale(1);
+            }
         }
-        
+
         .product-color {
             width: 80px;
             height: 80px;
@@ -466,9 +605,9 @@ Funciones::mostrarAlertaSesion();
             justify-content: center;
             color: white;
             font-size: 2rem;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
         }
-        
+
         .product-name {
             font-weight: 600;
             color: #2c3e50;
@@ -480,20 +619,20 @@ Funciones::mostrarAlertaSesion();
             -webkit-line-clamp: 2;
             -webkit-box-orient: vertical;
         }
-        
+
         .product-code {
             color: var(--gris-oscuro);
             font-size: 0.85rem;
             margin-bottom: 10px;
         }
-        
+
         .product-price {
             color: var(--verde-principal);
             font-weight: 700;
             font-size: 1.4rem;
             margin: 15px 0;
         }
-        
+
         .product-stock {
             display: inline-block;
             padding: 6px 12px;
@@ -502,30 +641,37 @@ Funciones::mostrarAlertaSesion();
             font-weight: 500;
             margin-bottom: 10px;
         }
-        
+
         .stock-ok {
             background: var(--verde-claro);
             color: var(--verde-oscuro);
         }
-        
+
         .stock-low {
             background: #fff3cd;
             color: #856404;
             font-weight: 600;
         }
-        
+
         .stock-critico {
             background: #f8d7da;
             color: #721c24;
             font-weight: 700;
             animation: blink 1.5s infinite;
         }
-        
+
         @keyframes blink {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.7; }
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.7;
+            }
         }
-        
+
         /* Sección carrito - MEJORADA */
         .cart-section {
             flex: 2;
@@ -534,10 +680,10 @@ Funciones::mostrarAlertaSesion();
             display: flex;
             flex-direction: column;
             min-width: 450px;
-            height: calc(100vh - 250px); 
+            height: calc(100vh - 250px);
             overflow-y: auto;
         }
-        
+
         .cart-header {
             display: flex;
             justify-content: space-between;
@@ -546,62 +692,63 @@ Funciones::mostrarAlertaSesion();
             padding-bottom: 15px;
             border-bottom: 2px solid var(--gris-medio);
         }
-        
+
         .cart-items-container {
             flex: 1;
             overflow-y: auto;
             min-height: 200px;
-            max-height: 350px; /* Limitar altura máxima */
+            max-height: 350px;
+            /* Limitar altura máxima */
             margin-bottom: 20px;
             border: 2px solid var(--gris-medio);
             border-radius: 10px;
             padding: 15px;
             background: #fafafa;
         }
-        
+
         .cart-item {
             background: white;
             border-radius: 10px;
             padding: 15px;
             margin-bottom: 10px;
             border-left: 4px solid var(--verde-principal);
-            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
             transition: all 0.2s;
         }
-        
+
         .cart-item:hover {
             transform: translateX(3px);
-            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
         }
-        
+
         .cart-item-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
             margin-bottom: 12px;
         }
-        
+
         .cart-item-name {
             font-weight: 600;
             color: #2c3e50;
             font-size: 1rem;
             flex: 1;
         }
-        
+
         .cart-item-price {
             color: var(--verde-principal);
             font-weight: 700;
             font-size: 1.1rem;
             white-space: nowrap;
         }
-        
+
         .cart-item-body {
             display: flex;
             justify-content: space-between;
             align-items: center;
             gap: 15px;
         }
-        
+
         .quantity-controls {
             display: flex;
             align-items: center;
@@ -611,7 +758,7 @@ Funciones::mostrarAlertaSesion();
             border-radius: 8px;
             border: 1px solid var(--gris-medio);
         }
-        
+
         .qty-btn {
             width: 32px;
             height: 32px;
@@ -626,12 +773,12 @@ Funciones::mostrarAlertaSesion();
             transition: all 0.2s;
             font-weight: 600;
         }
-        
+
         .qty-btn:hover {
             background: var(--verde-oscuro);
             transform: scale(1.1);
         }
-        
+
         .qty-input {
             width: 50px;
             text-align: center;
@@ -642,7 +789,7 @@ Funciones::mostrarAlertaSesion();
             font-size: 1rem;
             background: white;
         }
-        
+
         .cart-item-total {
             font-weight: 700;
             color: var(--verde-oscuro);
@@ -650,7 +797,7 @@ Funciones::mostrarAlertaSesion();
             min-width: 80px;
             text-align: right;
         }
-        
+
         .remove-btn {
             color: #dc3545;
             background: none;
@@ -665,23 +812,23 @@ Funciones::mostrarAlertaSesion();
             align-items: center;
             justify-content: center;
         }
-        
+
         .remove-btn:hover {
             background: #f8d7da;
             color: #bd2130;
             transform: scale(1.1);
         }
-        
+
         /* Resumen */
         .cart-summary {
             background: linear-gradient(135deg, var(--gris-claro), white);
             padding: 25px;
             border-radius: 12px;
             border: 2px solid var(--gris-medio);
-            box-shadow: 0 5px 20px rgba(0,0,0,0.05);
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.05);
             margin-top: auto;
         }
-        
+
         .summary-row {
             display: flex;
             justify-content: space-between;
@@ -690,7 +837,7 @@ Funciones::mostrarAlertaSesion();
             border-bottom: 1px dashed var(--gris-medio);
             font-size: 1rem;
         }
-        
+
         .summary-total {
             font-size: 1.5rem;
             font-weight: 700;
@@ -699,7 +846,7 @@ Funciones::mostrarAlertaSesion();
             padding-top: 20px;
             border-top: 3px solid var(--verde-principal);
         }
-        
+
         /* Métodos de pago */
         .payment-methods {
             display: grid;
@@ -707,7 +854,7 @@ Funciones::mostrarAlertaSesion();
             gap: 12px;
             margin: 20px 0;
         }
-        
+
         .payment-option {
             text-align: center;
             padding: 18px 10px;
@@ -717,12 +864,12 @@ Funciones::mostrarAlertaSesion();
             background: white;
             transition: all 0.2s;
         }
-        
+
         .payment-option:hover {
             border-color: var(--verde-principal);
             transform: translateY(-2px);
         }
-        
+
         .payment-option.active {
             border-color: var(--verde-principal);
             background: var(--verde-claro);
@@ -730,18 +877,18 @@ Funciones::mostrarAlertaSesion();
             transform: translateY(-3px);
             box-shadow: 0 5px 15px rgba(40, 167, 69, 0.2);
         }
-        
+
         .payment-option i {
             font-size: 2rem;
             margin-bottom: 8px;
             display: block;
             color: var(--verde-principal);
         }
-        
+
         .payment-option.active i {
             color: var(--verde-oscuro);
         }
-        
+
         /* Botones */
         .action-buttons {
             display: grid;
@@ -749,7 +896,7 @@ Funciones::mostrarAlertaSesion();
             gap: 15px;
             margin-top: 25px;
         }
-        
+
         .btn-process {
             background: linear-gradient(135deg, var(--verde-principal), var(--verde-oscuro));
             border: none;
@@ -766,17 +913,17 @@ Funciones::mostrarAlertaSesion();
             gap: 10px;
             letter-spacing: 0.5px;
         }
-        
+
         .btn-process:hover:not(:disabled) {
             transform: translateY(-3px);
             box-shadow: 0 10px 25px rgba(40, 167, 69, 0.3);
         }
-        
+
         .btn-process:disabled {
             opacity: 0.6;
             cursor: not-allowed;
         }
-        
+
         .btn-clear {
             background: linear-gradient(135deg, #dc3545, #c82333);
             border: none;
@@ -791,26 +938,26 @@ Funciones::mostrarAlertaSesion();
             justify-content: center;
             gap: 10px;
         }
-        
+
         .btn-clear:hover {
             transform: translateY(-3px);
             box-shadow: 0 10px 25px rgba(220, 53, 69, 0.3);
         }
-        
+
         /* Empty states */
         .empty-cart {
             text-align: center;
             padding: 60px 20px;
             color: var(--gris-oscuro);
         }
-        
+
         .empty-cart i {
             font-size: 5rem;
             color: var(--gris-medio);
             margin-bottom: 20px;
             opacity: 0.5;
         }
-        
+
         /* Alertas toast */
         .alert-toast {
             position: fixed;
@@ -820,14 +967,21 @@ Funciones::mostrarAlertaSesion();
             min-width: 350px;
             animation: slideInRight 0.3s ease-out;
             border-radius: 10px;
-            box-shadow: 0 5px 20px rgba(0,0,0,0.15);
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.15);
         }
-        
+
         @keyframes slideInRight {
-            from { transform: translateX(100px); opacity: 0; }
-            to { transform: translateX(0); opacity: 1; }
+            from {
+                transform: translateX(100px);
+                opacity: 0;
+            }
+
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
         }
-        
+
         /* Cliente info */
         .cliente-info {
             background: var(--azul-claro);
@@ -837,112 +991,119 @@ Funciones::mostrarAlertaSesion();
             border-left: 4px solid #2196f3;
             display: none;
         }
-        
+
         .cliente-info.show {
             display: block;
             animation: fadeIn 0.3s ease-out;
         }
-        
+
         @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(-10px); }
-            to { opacity: 1; transform: translateY(0); }
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
         }
-        
+
         /* Scrollbar personalizado */
         ::-webkit-scrollbar {
             width: 8px;
             height: 8px;
         }
-        
+
         ::-webkit-scrollbar-track {
             background: var(--gris-claro);
             border-radius: 10px;
         }
-        
+
         ::-webkit-scrollbar-thumb {
             background: var(--verde-principal);
             border-radius: 10px;
         }
-        
+
         ::-webkit-scrollbar-thumb:hover {
             background: var(--verde-oscuro);
         }
-        
+
         /* Responsive */
         @media (max-width: 1200px) {
             .product-grid {
                 grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
             }
-            
+
             .cart-section {
                 min-width: 400px;
             }
         }
-        
+
         @media (max-width: 992px) {
             .pos-body {
                 flex-direction: column;
                 max-height: none;
                 min-height: auto;
             }
-            
+
             .products-section {
                 border-right: none;
                 border-bottom: 2px solid var(--gris-medio);
-                height: 500px; 
+                height: 500px;
                 min-height: 500px;
                 flex: none;
             }
-            
+
             .cart-section {
                 min-width: auto;
-                height: auto; 
+                height: auto;
                 max-height: 600px;
             }
-            
+
             .sidebar {
                 transform: translateX(-100%);
                 transition: transform 0.3s ease;
             }
-            
+
             .sidebar.active {
                 transform: translateX(0);
             }
-            
+
             .main-content {
                 margin-left: 0;
                 padding: 15px;
             }
-            
+
             .menu-toggle {
                 display: block;
             }
         }
-        
+
         @media (max-width: 768px) {
             .product-grid {
                 grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
             }
-            
+
             .action-buttons {
                 grid-template-columns: 1fr;
             }
-            
+
             .payment-methods {
                 grid-template-columns: 1fr;
             }
-            
+
             .cart-item-body {
                 flex-direction: column;
                 align-items: flex-start;
                 gap: 10px;
             }
-            
+
             .cart-item-total {
                 align-self: flex-end;
             }
         }
-        
+
         /* Badge de categorías */
         .category-badge {
             display: inline-block;
@@ -954,7 +1115,7 @@ Funciones::mostrarAlertaSesion();
             font-weight: 500;
             margin-top: 8px;
         }
-        
+
         /* Estado del carrito */
         .cart-status {
             display: flex;
@@ -963,12 +1124,12 @@ Funciones::mostrarAlertaSesion();
             font-size: 0.9rem;
             color: var(--gris-oscuro);
         }
-        
+
         .cart-total-items {
             font-weight: 600;
             color: var(--verde-principal);
         }
-        
+
         /* Títulos */
         .section-title {
             color: #2c3e50;
@@ -977,16 +1138,160 @@ Funciones::mostrarAlertaSesion();
             padding-bottom: 10px;
             border-bottom: 2px solid var(--gris-medio);
         }
+
+                /* Nuevos estilos para gestión de crédito */
+        .credito-section {
+            background: #fff8e1;
+            border-radius: 12px;
+            padding: 20px;
+            margin: 20px 0;
+            border: 2px solid #ffd54f;
+            box-shadow: 0 3px 15px rgba(255, 213, 79, 0.1);
+        }
+        
+        .credito-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #ffd54f;
+        }
+        
+        .credito-actions {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-top: 15px;
+        }
+        
+        .btn-reducir {
+            background: linear-gradient(135deg, #28a745, #1e7e34);
+            border: none;
+            color: white;
+            padding: 12px;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+        
+        .btn-reducir:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(40, 167, 69, 0.3);
+        }
+        
+        .btn-recargar {
+            background: linear-gradient(135deg, #007bff, #0056b3);
+            border: none;
+            color: white;
+            padding: 12px;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+        
+        .btn-recargar:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 123, 255, 0.3);
+        }
+        
+        .credito-info {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+        
+        .credito-card {
+            background: white;
+            border-radius: 10px;
+            padding: 15px;
+            text-align: center;
+            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.08);
+            border: 1px solid #e9ecef;
+        }
+        
+        .credito-card .valor {
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin: 10px 0;
+        }
+        
+        .deuda-valor {
+            color: #dc3545;
+        }
+        
+        .limite-valor {
+            color: #007bff;
+        }
+        
+        .credito-input {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        
+        .credito-input input {
+            flex: 1;
+            padding: 10px;
+            border: 2px solid #ced4da;
+            border-radius: 6px;
+            font-size: 1rem;
+            transition: all 0.3s;
+        }
+        
+        .credito-input input:focus {
+            border-color: #007bff;
+            box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.25);
+            outline: none;
+        }
+        
+        .credito-modal .modal-content {
+            border-radius: 15px;
+            overflow: hidden;
+        }
+        
+        .credito-modal .modal-header {
+            background: linear-gradient(135deg, #007bff, #0056b3);
+            color: white;
+            border-bottom: none;
+        }
+        
+        .credito-modal .modal-body {
+            padding: 25px;
+        }
+        
+        /* Responsive para sección crédito */
+        @media (max-width: 768px) {
+            .credito-actions {
+                grid-template-columns: 1fr;
+            }
+            
+            .credito-info {
+                grid-template-columns: 1fr;
+            }
+        }
     </style>
 </head>
+
 <body>
-  
+
     <?php include 'sidebar.php'; ?>
-    
+
     <!-- Main Content -->
     <div class="main-content">
-        
-        
+
         <!-- Contenido principal -->
         <div class="pos-container mt-4">
             <!-- Header POS -->
@@ -1009,7 +1314,7 @@ Funciones::mostrarAlertaSesion();
                     </div>
                 </div>
             </div>
-            
+
             <!-- Cuerpo POS -->
             <div class="pos-body">
                 <!-- SECCIÓN PRODUCTOS -->
@@ -1017,10 +1322,10 @@ Funciones::mostrarAlertaSesion();
                     <!-- Filtros -->
                     <div class="search-container">
                         <i class="fas fa-search"></i>
-                        <input type="text" id="searchInput" class="form-control" 
-                               placeholder="Buscar productos por nombre, código o categoría...">
+                        <input type="text" id="searchInput" class="form-control"
+                            placeholder="Buscar productos por nombre, código o categoría...">
                     </div>
-                    
+
                     <div class="mb-3">
                         <label class="form-label fw-bold">Filtrar por categoría:</label>
                         <div class="d-flex flex-wrap gap-2" id="categoryFilter">
@@ -1036,7 +1341,7 @@ Funciones::mostrarAlertaSesion();
                                 }
                                 $categorias[$cat]++;
                             }
-                            
+
                             foreach ($categorias as $categoria => $cantidad): ?>
                                 <button class="btn btn-sm btn-outline-success" data-category="<?php echo htmlspecialchars($categoria); ?>">
                                     <?php echo htmlspecialchars($categoria); ?>
@@ -1045,7 +1350,7 @@ Funciones::mostrarAlertaSesion();
                             <?php endforeach; ?>
                         </div>
                     </div>
-                    
+
                     <!-- Grid de productos -->
                     <div class="product-grid" id="productGrid">
                         <?php if (empty($productos)): ?>
@@ -1054,7 +1359,7 @@ Funciones::mostrarAlertaSesion();
                                 <h4 class="text-muted">No hay productos disponibles</h4>
                             </div>
                         <?php else: ?>
-                            <?php foreach ($productos as $producto): 
+                            <?php foreach ($productos as $producto):
                                 $stock = $producto['stock'];
                                 $min_stock = $producto['min_stock'] ?? 5;
                                 $stock_class = 'stock-ok';
@@ -1064,42 +1369,42 @@ Funciones::mostrarAlertaSesion();
                                     $stock_class = 'stock-low';
                                 }
                             ?>
-                                <div class="product-card" 
-                                     data-id="<?php echo $producto['id']; ?>"
-                                     data-nombre="<?php echo htmlspecialchars($producto['nombre_color']); ?>"
-                                     data-codigo="<?php echo htmlspecialchars($producto['codigo_color']); ?>"
-                                     data-precio="<?php echo $producto['precio_venta']; ?>"
-                                     data-stock="<?php echo $producto['stock']; ?>"
-                                     data-categoria="<?php echo htmlspecialchars($producto['categoria_nombre'] ?? 'Sin categoría'); ?>">
-                                    
+                                <div class="product-card"
+                                    data-id="<?php echo $producto['id']; ?>"
+                                    data-nombre="<?php echo htmlspecialchars($producto['nombre_color']); ?>"
+                                    data-codigo="<?php echo htmlspecialchars($producto['codigo_color']); ?>"
+                                    data-precio="<?php echo $producto['precio_venta']; ?>"
+                                    data-stock="<?php echo $producto['stock']; ?>"
+                                    data-categoria="<?php echo htmlspecialchars($producto['categoria_nombre'] ?? 'Sin categoría'); ?>">
+
                                     <div class="product-color">
                                         <i class="fas fa-shirt"></i>
                                     </div>
-                                    
+
                                     <h6 class="product-name">
                                         <?php echo htmlspecialchars($producto['nombre_color']); ?>
                                     </h6>
-                                    
+
                                     <div class="product-code">
                                         <i class="fas fa-barcode me-1"></i>
                                         <?php echo htmlspecialchars($producto['codigo_color']); ?>
                                     </div>
-                                    
+
                                     <div class="product-price">
                                         <?php echo Funciones::formatearMonedaBolivianos($producto['precio_venta']); ?>
                                     </div>
-                                    
+
                                     <div class="product-stock <?php echo $stock_class; ?>">
                                         <i class="fas fa-box me-1"></i>
                                         Stock: <?php echo $producto['stock']; ?>
                                     </div>
-                                    
+
                                     <div class="category-badge">
                                         <?php echo htmlspecialchars($producto['categoria_nombre'] ?? 'Sin categoría'); ?>
                                     </div>
-                                    
-                                    <button class="btn btn-success btn-sm w-100 mt-3" 
-                                            onclick="agregarAlCarrito(<?php echo $producto['id']; ?>)">
+
+                                    <button class="btn btn-success btn-sm w-100 mt-3"
+                                        onclick="agregarAlCarrito(<?php echo $producto['id']; ?>)">
                                         <i class="fas fa-cart-plus me-1"></i> Agregar
                                     </button>
                                 </div>
@@ -1107,7 +1412,7 @@ Funciones::mostrarAlertaSesion();
                         <?php endif; ?>
                     </div>
                 </div>
-                
+
                 <!-- SECCIÓN CARRITO -->
                 <div class="cart-section">
                     <!-- Cliente -->
@@ -1120,9 +1425,9 @@ Funciones::mostrarAlertaSesion();
                                 <option value="0">👤 Consumidor Final</option>
                                 <?php foreach ($clientes as $cliente): ?>
                                     <option value="<?php echo $cliente['id']; ?>"
-                                            data-deuda="<?php echo $cliente['saldo_deuda']; ?>"
-                                            data-limite="<?php echo $cliente['limite_credito']; ?>"
-                                            data-nombre="<?php echo htmlspecialchars($cliente['nombre']); ?>">
+                                        data-deuda="<?php echo $cliente['saldo_deuda']; ?>"
+                                        data-limite="<?php echo $cliente['limite_credito']; ?>"
+                                        data-nombre="<?php echo htmlspecialchars($cliente['nombre']); ?>">
                                         <?php echo htmlspecialchars($cliente['nombre']); ?>
                                         <?php if ($cliente['saldo_deuda'] > 0): ?>
                                             <span class="text-danger ms-2">
@@ -1136,10 +1441,10 @@ Funciones::mostrarAlertaSesion();
                                 <i class="fas fa-plus"></i>
                             </button>
                         </div>
-                        
+
                         <div id="clienteInfo" class="cliente-info"></div>
                     </div>
-                    
+
                     <!-- Items del carrito -->
                     <div class="cart-header">
                         <h4 class="mb-0">
@@ -1148,7 +1453,7 @@ Funciones::mostrarAlertaSesion();
                         </h4>
                         <span class="badge bg-success fs-6" id="cartCountBadge">0</span>
                     </div>
-                    
+
                     <div class="cart-items-container" id="cartItems">
                         <div class="empty-cart" id="emptyCart">
                             <i class="fas fa-shopping-basket"></i>
@@ -1156,33 +1461,105 @@ Funciones::mostrarAlertaSesion();
                             <p class="text-muted">Agrega productos desde la lista</p>
                         </div>
                     </div>
-                    
+
+                    <!-- Sección de Gestión de Crédito (NUEVO) -->
+                    <div id="creditoSection" class="credito-section" style="display: none;">
+                        <div class="credito-header">
+                            <h5 class="mb-0">
+                                <i class="fas fa-credit-card me-2"></i>
+                                Gestión de Crédito
+                            </h5>
+                            <span class="badge bg-warning">
+                                <i class="fas fa-exclamation-circle"></i>
+                                Acciones Cliente
+                            </span>
+                        </div>
+                        
+                        <div class="credito-info">
+                            <div class="credito-card">
+                                <div class="titulo">
+                                    <i class="fas fa-money-bill-wave text-danger me-2"></i>
+                                    Deuda Actual
+                                </div>
+                                <div id="creditoDeuda" class="valor deuda-valor">Bs 0.00</div>
+                                <div class="text-muted small">Saldo pendiente</div>
+                            </div>
+                            
+                            <div class="credito-card">
+                                <div class="titulo">
+                                    <i class="fas fa-credit-card text-primary me-2"></i>
+                                    Límite Disponible
+                                </div>
+                                <div id="creditoLimite" class="valor limite-valor">Bs 0.00</div>
+                                <div class="text-muted small">Crédito disponible</div>
+                            </div>
+                        </div>
+                        
+                        <div id="accionReducir" style="display: none;">
+                            <label class="form-label fw-bold">
+                                <i class="fas fa-hand-holding-usd me-1"></i>
+                                Reducir Deuda
+                            </label>
+                            <p class="text-muted small mb-2">
+                                El monto pagado se restará de la deuda y se sumará al límite de crédito.
+                            </p>
+                            <div class="credito-input">
+                                <input type="number" id="montoReducir" 
+                                       class="form-control" 
+                                       placeholder="Monto a pagar"
+                                       min="0.01" step="0.01">
+                                <button class="btn-reducir" onclick="reducirDeuda()">
+                                    <i class="fas fa-check-circle"></i>
+                                    Pagar Deuda
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div id="accionRecargar">
+                            <label class="form-label fw-bold">
+                                <i class="fas fa-plus-circle me-1"></i>
+                                Recargar Crédito
+                            </label>
+                            <p class="text-muted small mb-2">
+                                Aumentar el límite de crédito disponible.
+                            </p>
+                            <div class="credito-input">
+                                <input type="number" id="montoRecargar" 
+                                       class="form-control" 
+                                       placeholder="Monto a recargar"
+                                       min="0.01" step="0.01">
+                                <button class="btn-recargar" onclick="recargarCredito()">
+                                    <i class="fas fa-plus"></i>
+                                    Recargar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Resumen -->
                     <div class="cart-summary">
                         <h5 class="section-title mb-3">Resumen de Compra</h5>
-                        
+
                         <div class="summary-row">
                             <span>Subtotal:</span>
                             <span id="subtotalDisplay">Bs 0.00</span>
                         </div>
-                        
+
                         <div class="summary-row">
                             <span>Descuento:</span>
                             <div class="d-flex align-items-center gap-2">
-                                <input type="number" id="descuentoInput" class="form-control form-control-sm" 
-                                       value="0" min="0" step="0.01" style="width: 120px;" 
-                                       onchange="actualizarTotales()">
+                                <input type="number" id="descuentoInput" class="form-control form-control-sm"
+                                    value="0" min="0" step="0.01" style="width: 120px;"
+                                    onchange="actualizarTotales()">
                                 <small class="text-muted">Bs </small>
                             </div>
                         </div>
-                        
 
-                        
                         <div class="summary-row summary-total">
                             <span>TOTAL:</span>
                             <span id="totalDisplay" class="fw-bold">Bs 0.00</span>
                         </div>
-                        
+
                         <!-- Método de pago -->
                         <div class="mt-4">
                             <label class="form-label fw-bold mb-2">Método de Pago</label>
@@ -1197,16 +1574,16 @@ Funciones::mostrarAlertaSesion();
                                 </div>
                             </div>
                         </div>
-                        
+
                         <!-- Observaciones -->
                         <div class="mt-4">
                             <label class="form-label fw-bold mb-2">
                                 <i class="fas fa-sticky-note me-1"></i> Observaciones
                             </label>
-                            <textarea id="observacionesInput" class="form-control" rows="2" 
-                                      placeholder="Notas adicionales para la venta..."></textarea>
+                            <textarea id="observacionesInput" class="form-control" rows="2"
+                                placeholder="Notas adicionales para la venta..."></textarea>
                         </div>
-                        
+
                         <!-- Botones de acción -->
                         <div class="action-buttons">
                             <button class="btn-process" onclick="procesarVenta()" id="btnProcesar">
@@ -1223,7 +1600,7 @@ Funciones::mostrarAlertaSesion();
             </div>
         </div>
     </div>
-    
+
     <!-- Modal nuevo cliente -->
     <div class="modal fade" id="clienteModal" tabindex="-1">
         <div class="modal-dialog">
@@ -1262,51 +1639,271 @@ Funciones::mostrarAlertaSesion();
             </div>
         </div>
     </div>
-    
+
+    <!-- Modal para descripción de pago -->
+    <div class="modal fade credito-modal" id="descripcionModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="fas fa-file-invoice me-2"></i>
+                        Detalles del Pago
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="formDescripcion" onsubmit="confirmarAccionCredito(event)">
+                        <div class="mb-3">
+                            <label class="form-label">Descripción (opcional)</label>
+                            <textarea id="descripcionInput" class="form-control" rows="3"
+                                placeholder="Ej: Pago en efectivo, Transferencia bancaria, etc."></textarea>
+                        </div>
+                        <input type="hidden" id="accionCredito">
+                        <input type="hidden" id="montoCredito">
+                        <button type="submit" class="btn btn-success w-100">
+                            <i class="fas fa-check-circle me-2"></i>
+                            Confirmar Acción
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    
+
     <script>
         // Variables globales
         let carrito = [];
         let metodoPago = 'contado';
-        
+
         // Inicializar
         document.addEventListener('DOMContentLoaded', function() {
             cargarCarritoGuardado();
             actualizarCarritoUI();
-            //iniciarReloj();
             configurarFiltros();
-            
+
             // Configurar búsqueda
             document.getElementById('searchInput').addEventListener('input', function() {
                 buscarProductos(this.value);
             });
-            
+
             // Configurar descuento
             document.getElementById('descuentoInput').addEventListener('input', actualizarTotales);
-            
+
             // Configurar cliente
-            document.getElementById('clienteSelect').addEventListener('change', actualizarInfoCliente);
-            
+            document.getElementById('clienteSelect').addEventListener('change', function() {
+                actualizarInfoCliente();
+                actualizarSeccionCredito();
+            });
+
             // Mostrar notificación si hay carrito guardado
             if (carrito.length > 0) {
                 mostrarToast('Carrito recuperado de sesión anterior', 'info');
             }
+
+            // Inicializar sección crédito
+            actualizarSeccionCredito();
         });
-        
-        // Iniciar reloj
-        function iniciarReloj() {
-            function actualizarHora() {
-                const ahora = new Date();
-                const hora = ahora.getHours().toString().padStart(2, '0');
-                const minutos = ahora.getMinutes().toString().padStart(2, '0');
-                const segundos = ahora.getSeconds().toString().padStart(2, '0');
-                document.getElementById('currentTime').textContent = `${hora}:${minutos}:${segundos}`;
+
+        // Actualizar sección de crédito
+        function actualizarSeccionCredito() {
+            const select = document.getElementById('clienteSelect');
+            const clienteId = select.value;
+            const seccionCredito = document.getElementById('creditoSection');
+            
+            if (clienteId > 0) {
+                seccionCredito.style.display = 'block';
+                
+                const option = select.options[select.selectedIndex];
+                const deuda = parseFloat(option.dataset.deuda) || 0;
+                const limite = parseFloat(option.dataset.limite) || 0;
+                
+                // Actualizar valores
+                document.getElementById('creditoDeuda').textContent = formatearMonedaBolivianos(deuda);
+                document.getElementById('creditoLimite').textContent = formatearMonedaBolivianos(limite);
+                
+                // Mostrar/ocultar sección de reducir deuda
+                const accionReducir = document.getElementById('accionReducir');
+                if (deuda > 0) {
+                    accionReducir.style.display = 'block';
+                    document.getElementById('montoReducir').max = deuda;
+                    document.getElementById('montoReducir').placeholder = `Máximo: ${formatearMonedaBolivianos(deuda)}`;
+                } else {
+                    accionReducir.style.display = 'none';
+                }
+                
+                // Configurar máximo para recarga
+                document.getElementById('montoRecargar').value = '';
+            } else {
+                seccionCredito.style.display = 'none';
             }
-            setInterval(actualizarHora, 1000);
         }
-        
+
+        // Reducir deuda
+        async function reducirDeuda() {
+            const clienteId = document.getElementById('clienteSelect').value;
+            const montoInput = document.getElementById('montoReducir');
+            const monto = parseFloat(montoInput.value);
+            
+            if (clienteId <= 0) {
+                mostrarToast('Seleccione un cliente primero', 'warning');
+                return;
+            }
+            
+            if (!monto || monto <= 0) {
+                mostrarToast('Ingrese un monto válido', 'warning');
+                montoInput.focus();
+                return;
+            }
+            
+            const option = document.getElementById('clienteSelect').options[document.getElementById('clienteSelect').selectedIndex];
+            const deudaActual = parseFloat(option.dataset.deuda) || 0;
+            
+            if (monto > deudaActual) {
+                mostrarToast(`El monto no puede superar la deuda actual (${formatearMonedaBolivianos(deudaActual)})`, 'warning');
+                montoInput.value = deudaActual;
+                montoInput.focus();
+                return;
+            }
+            
+            // Mostrar modal para descripción
+            document.getElementById('accionCredito').value = 'reducir_deuda';
+            document.getElementById('montoCredito').value = monto;
+            document.getElementById('descripcionInput').value = 'Pago de deuda';
+            
+            const modal = new bootstrap.Modal(document.getElementById('descripcionModal'));
+            modal.show();
+        }
+
+        // Recargar crédito
+        async function recargarCredito() {
+            const clienteId = document.getElementById('clienteSelect').value;
+            const montoInput = document.getElementById('montoRecargar');
+            const monto = parseFloat(montoInput.value);
+            
+            if (clienteId <= 0) {
+                mostrarToast('Seleccione un cliente primero', 'warning');
+                return;
+            }
+            
+            if (!monto || monto <= 0) {
+                mostrarToast('Ingrese un monto válido', 'warning');
+                montoInput.focus();
+                return;
+            }
+            
+            // Mostrar modal para descripción
+            document.getElementById('accionCredito').value = 'recargar_credito';
+            document.getElementById('montoCredito').value = monto;
+            document.getElementById('descripcionInput').value = 'Recarga de crédito';
+            
+            const modal = new bootstrap.Modal(document.getElementById('descripcionModal'));
+            modal.show();
+        }
+
+        // Confirmar acción de crédito
+        async function confirmarAccionCredito(event) {
+            event.preventDefault();
+            
+            const accion = document.getElementById('accionCredito').value;
+            const monto = document.getElementById('montoCredito').value;
+            const descripcion = document.getElementById('descripcionInput').value;
+            const clienteId = document.getElementById('clienteSelect').value;
+            
+            const formData = new FormData();
+            formData.append('accion', accion);
+            formData.append('cliente_id', clienteId);
+            formData.append('monto', monto);
+            formData.append('descripcion', descripcion);
+            
+            try {
+                const response = await fetch('modulo_ventas.php', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    // Cerrar modal
+                    bootstrap.Modal.getInstance(document.getElementById('descripcionModal')).hide();
+                    
+                    // Actualizar select
+                    const select = document.getElementById('clienteSelect');
+                    const option = select.options[select.selectedIndex];
+                    
+                    if (accion === 'reducir_deuda') {
+                        option.dataset.deuda = data.cliente.saldo_deuda;
+                        option.dataset.limite = data.cliente.limite_credito;
+                        
+                        // Actualizar texto en el option
+                        const nombre = option.dataset.nombre;
+                        option.textContent = nombre;
+                        if (data.cliente.saldo_deuda > 0) {
+                            option.textContent += ` (Deuda: ${formatearMonedaBolivianos(data.cliente.saldo_deuda)})`;
+                        }
+                        
+                        mostrarToast(`Pago realizado: ${formatearMonedaBolivianos(data.pago_realizado)}`, 'success');
+                    } else {
+                        option.dataset.limite = data.cliente.limite_credito;
+                        mostrarToast(`Crédito recargado: ${formatearMonedaBolivianos(monto)}`, 'success');
+                    }
+                    
+                    // Limpiar inputs
+                    document.getElementById('montoReducir').value = '';
+                    document.getElementById('montoRecargar').value = '';
+                    
+                    // Actualizar UI
+                    actualizarInfoCliente();
+                    actualizarSeccionCredito();
+                    
+                } else {
+                    throw new Error(data.error || 'Error desconocido');
+                }
+
+            } catch (error) {
+                console.error('Error:', error);
+                mostrarToast('Error: ' + error.message, 'danger');
+            }
+        }
+
+        // Actualizar info del cliente
+        function actualizarInfoCliente() {
+            const select = document.getElementById('clienteSelect');
+            const option = select.options[select.selectedIndex];
+            const clienteInfo = document.getElementById('clienteInfo');
+
+            if (option.value > 0) {
+                const deuda = parseFloat(option.dataset.deuda) || 0;
+                const limite = parseFloat(option.dataset.limite) || 0;
+                const nombre = option.dataset.nombre || '';
+
+                let infoHTML = `
+                    <div class="d-flex justify-content-between">
+                        <span>Cliente:</span>
+                        <strong>${nombre}</strong>
+                    </div>
+                    <div class="d-flex justify-content-between">
+                        <span>Deuda actual:</span>
+                        <span class="${deuda > 0 ? 'text-danger fw-bold' : 'text-success'}">
+                            ${formatearMonedaBolivianos(deuda)}
+                        </span>
+                    </div>
+                    <div class="d-flex justify-content-between">
+                        <span>Límite crédito:</span>
+                        <span class="text-primary">${formatearMonedaBolivianos(limite)}</span>
+                    </div>
+                `;
+
+                clienteInfo.innerHTML = infoHTML;
+                clienteInfo.classList.add('show');
+            } else {
+                clienteInfo.classList.remove('show');
+            }
+        }
+
         // Configurar filtros por categoría
         function configurarFiltros() {
             const filtros = document.querySelectorAll('#categoryFilter button');
@@ -1314,10 +1911,10 @@ Funciones::mostrarAlertaSesion();
                 filtro.addEventListener('click', function() {
                     filtros.forEach(f => f.classList.remove('active'));
                     this.classList.add('active');
-                    
+
                     const categoria = this.dataset.category;
                     const productos = document.querySelectorAll('.product-card');
-                    
+
                     productos.forEach(producto => {
                         if (categoria === 'all' || producto.dataset.categoria === categoria) {
                             producto.style.display = 'block';
@@ -1328,17 +1925,17 @@ Funciones::mostrarAlertaSesion();
                 });
             });
         }
-        
+
         // Buscar productos
         function buscarProductos(termino) {
             const productos = document.querySelectorAll('.product-card');
             let encontrados = 0;
-            
+
             productos.forEach(producto => {
                 const nombre = producto.dataset.nombre.toLowerCase();
                 const codigo = producto.dataset.codigo.toLowerCase();
                 const buscar = termino.toLowerCase();
-                
+
                 if (buscar === '' || nombre.includes(buscar) || codigo.includes(buscar)) {
                     producto.style.display = 'block';
                     encontrados++;
@@ -1347,7 +1944,7 @@ Funciones::mostrarAlertaSesion();
                 }
             });
         }
-        
+
         // AGREGAR AL CARRITO
         function agregarAlCarrito(productoId) {
             const productoElement = document.querySelector(`.product-card[data-id="${productoId}"]`);
@@ -1355,7 +1952,7 @@ Funciones::mostrarAlertaSesion();
                 mostrarToast('Producto no encontrado', 'danger');
                 return;
             }
-            
+
             const producto = {
                 id: parseInt(productoId),
                 nombre: productoElement.dataset.nombre,
@@ -1363,7 +1960,7 @@ Funciones::mostrarAlertaSesion();
                 precio: parseFloat(productoElement.dataset.precio),
                 stock: parseInt(productoElement.dataset.stock)
             };
-            
+
             const index = carrito.findIndex(item => item.id === producto.id);
             
             if (index !== -1) {
@@ -1379,21 +1976,21 @@ Funciones::mostrarAlertaSesion();
                 carrito.push(producto);
                 mostrarToast(`✓ Agregado: ${producto.nombre}`, 'success');
             }
-            
+
             actualizarCarritoUI();
             guardarCarritoStorage();
             
             productoElement.classList.add('selected');
             setTimeout(() => productoElement.classList.remove('selected'), 500);
         }
-        
+
         // Actualizar interfaz del carrito
         function actualizarCarritoUI() {
             const cartItems = document.getElementById('cartItems');
             const emptyCart = document.getElementById('emptyCart');
             const cartCount = document.getElementById('cartCount');
             const cartCountBadge = document.getElementById('cartCountBadge');
-            
+
             if (carrito.length === 0) {
                 if (emptyCart) emptyCart.style.display = 'block';
                 cartItems.innerHTML = '';
@@ -1401,14 +1998,14 @@ Funciones::mostrarAlertaSesion();
                 if (cartCountBadge) cartCountBadge.textContent = '0';
             } else {
                 if (emptyCart) emptyCart.style.display = 'none';
-                
+
                 let html = '';
                 let totalItems = 0;
-                
+
                 carrito.forEach((item, index) => {
                     const subtotal = item.precio * item.cantidad;
                     totalItems += item.cantidad;
-                    
+
                     html += `
                     <div class="cart-item">
                         <div class="cart-item-header">
@@ -1437,141 +2034,105 @@ Funciones::mostrarAlertaSesion();
                     </div>
                     `;
                 });
-                
+
                 cartItems.innerHTML = html;
                 if (cartCount) cartCount.textContent = totalItems;
                 if (cartCountBadge) cartCountBadge.textContent = totalItems;
             }
-            
+
             actualizarTotales();
         }
-        
+
         // Modificar cantidad
         function modificarCantidad(index, cambio) {
             const nuevaCantidad = carrito[index].cantidad + cambio;
-            
+
             if (nuevaCantidad < 1) {
                 eliminarDelCarrito(index);
                 return;
             }
-            
+
             if (nuevaCantidad > carrito[index].stock) {
                 mostrarToast('No hay suficiente stock disponible', 'warning');
                 return;
             }
-            
+
             carrito[index].cantidad = nuevaCantidad;
             actualizarCarritoUI();
             guardarCarritoStorage();
         }
-        
+
         // Cambiar cantidad manualmente
         function cambiarCantidad(index, valor) {
             const cantidad = parseInt(valor);
-            
+
             if (isNaN(cantidad) || cantidad < 1) {
                 eliminarDelCarrito(index);
                 return;
             }
-            
+
             if (cantidad > carrito[index].stock) {
                 mostrarToast('No hay suficiente stock disponible', 'warning');
                 carrito[index].cantidad = carrito[index].stock;
             } else {
                 carrito[index].cantidad = cantidad;
             }
-            
+
             actualizarCarritoUI();
             guardarCarritoStorage();
         }
-        
+
         // Eliminar del carrito
         function eliminarDelCarrito(index) {
             const producto = carrito[index];
             carrito.splice(index, 1);
-            
+
             mostrarToast(`✗ Eliminado: ${producto.nombre}`, 'info');
             actualizarCarritoUI();
             guardarCarritoStorage();
         }
-        
+
         // Actualizar totales
         function actualizarTotales() {
             let subtotal = 0;
             carrito.forEach(item => {
                 subtotal += item.precio * item.cantidad;
             });
-            
+
             const descuento = parseFloat(document.getElementById('descuentoInput').value) || 0;
             const total = Math.max(0, subtotal - descuento);
-            
+
             document.getElementById('subtotalDisplay').textContent = formatearMonedaBolivianos(subtotal);
-            //document.getElementById('ivaDisplay').textContent = formatearMonedaBolivianos(iva);
             document.getElementById('totalDisplay').textContent = formatearMonedaBolivianos(total);
         }
-        
-        // Actualizar info del cliente
-        function actualizarInfoCliente() {
-            const select = document.getElementById('clienteSelect');
-            const option = select.options[select.selectedIndex];
-            const clienteInfo = document.getElementById('clienteInfo');
-            
-            if (option.value > 0) {
-                const deuda = parseFloat(option.dataset.deuda) || 0;
-                const limite = parseFloat(option.dataset.limite) || 0;
-                const nombre = option.dataset.nombre || '';
-                
-                let infoHTML = `
-                    <div class="d-flex justify-content-between">
-                        <span>Cliente:</span>
-                        <strong>${nombre}</strong>
-                    </div>
-                    <div class="d-flex justify-content-between">
-                        <span>Deuda actual:</span>
-                        <span class="${deuda > 0 ? 'text-danger fw-bold' : 'text-success'}">
-                            ${formatearMonedaBolivianos(deuda)}
-                        </span>
-                    </div>
-                    <div class="d-flex justify-content-between">
-                        <span>Límite crédito:</span>
-                        <span class="text-primary">${formatearMonedaBolivianos(limite)}</span>
-                    </div>
-                `;
-                
-                clienteInfo.innerHTML = infoHTML;
-                clienteInfo.classList.add('show');
-            } else {
-                clienteInfo.classList.remove('show');
-            }
-        }
-        
+
         // Seleccionar método de pago
         function seleccionarPago(tipo) {
             metodoPago = tipo;
-            
+
             document.querySelectorAll('.payment-option').forEach(btn => {
                 btn.classList.remove('active');
             });
             document.querySelector(`.payment-option[data-payment="${tipo}"]`).classList.add('active');
         }
-        
+
         // Procesar venta
         async function procesarVenta() {
             if (carrito.length === 0) {
                 mostrarToast('El carrito está vacío', 'warning');
                 return;
             }
-            
+
             const clienteId = document.getElementById('clienteSelect').value;
             const descuento = document.getElementById('descuentoInput').value;
             const observaciones = document.getElementById('observacionesInput').value;
-            
+
             // Validaciones
             if (metodoPago === 'credito' && clienteId == 0) {
                 mostrarToast('Debe seleccionar un cliente para ventas a crédito', 'warning');
                 return;
             }
-            
+
             // Verificar stock
             for (let item of carrito) {
                 if (item.cantidad > item.stock) {
@@ -1579,15 +2140,15 @@ Funciones::mostrarAlertaSesion();
                     return;
                 }
             }
-            
+
             // Confirmar
             const total = document.getElementById('totalDisplay').textContent;
             const clienteNombre = document.getElementById('clienteSelect').selectedOptions[0].text;
-            
+
             if (!confirm(`¿Confirmar venta por ${total}?\n\nCliente: ${clienteNombre}\nTipo de pago: ${metodoPago.toUpperCase()}\n\n¿Desea continuar?`)) {
                 return;
             }
-            
+
             // Preparar datos
             const formData = new FormData();
             formData.append('accion', 'procesar_venta');
@@ -1599,29 +2160,29 @@ Funciones::mostrarAlertaSesion();
                 id: p.id,
                 cantidad: p.cantidad
             }))));
-            
+
             // Deshabilitar botón
             const btn = document.getElementById('btnProcesar');
             const originalHtml = btn.innerHTML;
             btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> PROCESANDO...';
             btn.disabled = true;
-            
+
             try {
                 const response = await fetch('modulo_ventas.php', {
                     method: 'POST',
                     body: formData
                 });
-                
+
                 const data = await response.json();
-                
+
                 if (data.success) {
                     // Limpiar carrito
                     carrito = [];
                     localStorage.removeItem('carrito_venta');
                     actualizarCarritoUI();
-                    
+
                     mostrarToast('¡Venta procesada exitosamente!', 'success');
-                    
+
                     // Redirigir después de 1 segundo
                     setTimeout(() => {
                         window.location.href = data.redirect;
@@ -1629,38 +2190,38 @@ Funciones::mostrarAlertaSesion();
                 } else {
                     throw new Error(data.error || 'Error desconocido');
                 }
-                
+
             } catch (error) {
                 console.error('Error:', error);
                 mostrarToast('Error al procesar la venta: ' + error.message, 'danger');
-                
+
                 // Restaurar botón
                 btn.innerHTML = originalHtml;
                 btn.disabled = false;
             }
         }
-        
+
         // Nuevo cliente
         function nuevoCliente() {
             const modal = new bootstrap.Modal(document.getElementById('clienteModal'));
             modal.show();
         }
-        
+
         // Guardar cliente
         async function guardarCliente(event) {
             event.preventDefault();
-            
+
             const formData = new FormData(event.target);
             formData.append('accion', 'guardar_cliente');
-            
+
             try {
                 const response = await fetch('modulo_ventas.php', {
                     method: 'POST',
                     body: formData
                 });
-                
+
                 const data = await response.json();
-                
+
                 if (data.success) {
                     // Agregar cliente al select
                     const select = document.getElementById('clienteSelect');
@@ -1672,32 +2233,33 @@ Funciones::mostrarAlertaSesion();
                     option.setAttribute('data-nombre', data.cliente.nombre);
                     select.appendChild(option);
                     select.value = data.cliente.id;
-                    
+
                     // Actualizar info del cliente
                     actualizarInfoCliente();
-                    
+                    actualizarSeccionCredito();
+
                     // Cerrar modal
                     bootstrap.Modal.getInstance(document.getElementById('clienteModal')).hide();
-                    
+
                     // Limpiar formulario
                     event.target.reset();
-                    
+
                     mostrarToast(data.message, 'success');
                 } else {
                     throw new Error(data.error || 'Error desconocido');
                 }
-                
+
             } catch (error) {
                 console.error('Error:', error);
                 mostrarToast('Error al guardar cliente: ' + error.message, 'danger');
             }
         }
-        
+
         // Funciones auxiliares
         function formatearMonedaBolivianos(amount) {
-            return 'Bs' + parseFloat(amount).toFixed(2).replace(/\d(?=(\d{3})+\.)/g, '$&,');
+            return 'Bs ' + parseFloat(amount).toFixed(2);
         }
-        
+
         function mostrarToast(mensaje, tipo = 'info') {
             const iconos = {
                 'success': 'check-circle',
@@ -1705,7 +2267,7 @@ Funciones::mostrarAlertaSesion();
                 'warning': 'exclamation-triangle',
                 'info': 'info-circle'
             };
-            
+
             const toast = document.createElement('div');
             toast.className = `alert alert-${tipo} alert-dismissible fade show alert-toast`;
             toast.innerHTML = `
@@ -1713,38 +2275,38 @@ Funciones::mostrarAlertaSesion();
                 ${mensaje}
                 <button type="button" class="btn-close" onclick="this.parentElement.remove()"></button>
             `;
-            
+
             document.body.appendChild(toast);
-            
+
             setTimeout(() => {
                 if (toast.parentElement) {
                     toast.remove();
                 }
             }, 3000);
         }
-        
+
         function guardarCarritoStorage() {
             localStorage.setItem('carrito_venta', JSON.stringify(carrito));
         }
-        
+
         function cargarCarritoGuardado() {
             try {
                 const guardado = localStorage.getItem('carrito_venta');
                 if (guardado) {
                     carrito = JSON.parse(guardado);
                 }
-            } catch(e) {
+            } catch (e) {
                 console.error('Error cargando carrito:', e);
                 localStorage.removeItem('carrito_venta');
             }
         }
-        
+
         function limpiarCarrito() {
             if (carrito.length === 0) {
                 mostrarToast('El carrito ya está vacío', 'info');
                 return;
             }
-            
+
             if (confirm('¿Está seguro de limpiar el carrito?')) {
                 carrito = [];
                 localStorage.removeItem('carrito_venta');
@@ -1754,5 +2316,5 @@ Funciones::mostrarAlertaSesion();
         }
     </script>
 </body>
-</html>
 
+</html>
