@@ -1506,7 +1506,7 @@ Funciones::mostrarAlertaSesion();
                                 Reducir Deuda
                             </label>
                             <p class="text-muted small mb-2">
-                                El monto pagado se restará de la deuda y se sumará al límite de crédito.
+                                El monto pagado se restará de la deuda y se restará al límite de crédito.
                             </p>
                             <div class="credito-input">
                                 <input type="number" id="montoReducir"
